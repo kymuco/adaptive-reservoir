@@ -94,6 +94,6 @@ def _sample_non_zero_weights(
 
 
 def _derive_seed(seed: int, label: str) -> int:
-    payload = f"{seed}:{label}".encode("utf-8")
+    payload = f"{seed}:{label}".encode()
     digest = hashlib.blake2b(payload, digest_size=8).digest()
     return int.from_bytes(digest, "little", signed=False)
