@@ -8,6 +8,7 @@ from adaptive_reservoir.core.config import (
     TraceConfig,
 )
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir.core.state import ReservoirState
 
 __all__ = [
     "AdaptiveChannels",
@@ -16,6 +17,7 @@ __all__ = [
     "ChannelConfig",
     "ReadoutConfig",
     "ReservoirConfig",
+    "ReservoirState",
     "StepMetrics",
     "TraceConfig",
 ]
