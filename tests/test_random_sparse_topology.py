@@ -23,7 +23,10 @@ def test_random_sparse_topology_has_fixed_in_degree() -> None:
     config = _config(n_cells=8)
     weights = RandomSparseTopologyBuilder(in_degree=3).build(config)
 
-    np.testing.assert_array_equal(np.count_nonzero(weights, axis=1), np.full(8, 3))
+    np.testing.assert_array_equal(
+        np.count_nonzero(weights, axis=1),
+        np.full(8, 3),
+    )
 
 
 def test_random_sparse_topology_has_no_invalid_source_indices() -> None:
@@ -46,10 +49,16 @@ def test_random_sparse_topology_disables_self_loops_by_default() -> None:
 
 def test_random_sparse_topology_can_enable_self_loops() -> None:
     config = _config(n_cells=4)
-    weights = RandomSparseTopologyBuilder(in_degree=4, allow_self_loops=True).build(config)
+    weights = RandomSparseTopologyBuilder(
+        in_degree=4,
+        allow_self_loops=True,
+    ).build(config)
 
     assert np.all(np.diag(weights) != 0.0)
-    np.testing.assert_array_equal(np.count_nonzero(weights, axis=1), np.full(4, 4))
+    np.testing.assert_array_equal(
+        np.count_nonzero(weights, axis=1),
+        np.full(4, 4),
+    )
 
 
 def test_random_sparse_topology_is_seeded() -> None:
