@@ -49,7 +49,7 @@ class AdaptiveReservoir:
                 target_available=target is not None,
                 us_per_sample=elapsed_us,
             ),
-            extra={"api_stage": "draft"},
+            state=None,
         )
 
     def reset(self) -> None:
