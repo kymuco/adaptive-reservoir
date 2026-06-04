@@ -42,7 +42,9 @@ class RandomSparseTopologyBuilder:
 
         dtype = np.dtype(config.dtype)
         weights = np.zeros((config.n_cells, config.n_cells), dtype=dtype)
-        rng = np.random.default_rng(_derive_seed(config.seed, _RANDOM_SPARSE_SEED_LABEL))
+        rng = np.random.default_rng(
+            _derive_seed(config.seed, _RANDOM_SPARSE_SEED_LABEL)
+        )
 
         for target in range(config.n_cells):
             sources = rng.choice(
@@ -62,8 +64,13 @@ class RandomSparseTopologyBuilder:
     def _validate_in_degree(self, n_cells: int) -> None:
         max_in_degree = n_cells if self.allow_self_loops else n_cells - 1
         if self.in_degree > max_in_degree:
-            loop_policy = "with self-loops" if self.allow_self_loops else "without self-loops"
-            msg = f"in_degree must be <= {max_in_degree} for n_cells={n_cells} {loop_policy}"
+            loop_policy = (
+                "with self-loops" if self.allow_self_loops else "without self-loops"
+            )
+            msg = (
+                f"in_degree must be <= {max_in_degree} "
+                f"for n_cells={n_cells} {loop_policy}"
+            )
             raise ValueError(msg)
 
 
