@@ -20,7 +20,15 @@ CPU-friendly temporal adaptation layer for software agents and streaming systems
 
 ## Development
 
+Run the local checks:
+
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install -e .
+python -m pip install pytest ruff
 python -m pytest
 python -m ruff check .
+```
+
+## License
+
+Apache-2.0.
