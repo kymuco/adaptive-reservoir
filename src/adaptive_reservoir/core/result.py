@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import Any
+
+from adaptive_reservoir.core.state import ReservoirState
 
 
 @dataclass(frozen=True, slots=True)
 class AdaptiveChannels:
     """Normalized adaptive state channels.
 
-    All values are expected to stay in the inclusive range [0.0, 1.0]. PR0.3
-    returns neutral defaults; later milestones will implement channel logic.
+    All values must stay in the inclusive range [0.0, 1.0]. Channel objects are
+    strict by design: invalid channel calculators should fail loudly instead of
+    being silently clamped.
     """
 
     novelty: float = 0.0
@@ -19,6 +22,13 @@ class AdaptiveChannels:
     drift_pressure: float = 0.0
     confidence: float = 0.0
     saturation: float = 0.0
+
+    def __post_init__(self) -> None:
+        _validate_channel("novelty", self.novelty)
+        _validate_channel("stability", self.stability)
+        _validate_channel("drift_pressure", self.drift_pressure)
+        _validate_channel("confidence", self.confidence)
+        _validate_channel("saturation", self.saturation)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +38,20 @@ class StepMetrics:
     samples_seen: int
     prediction_available: bool = False
     target_available: bool = False
+    readout_updated: bool = False
+    state_norm: float | None = None
+    feature_norm: float | None = None
+    prediction_error: float | None = None
     us_per_sample: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.samples_seen < 0:
+            msg = "samples_seen must be non-negative"
+            raise ValueError(msg)
+        _validate_optional_non_negative("state_norm", self.state_norm)
+        _validate_optional_non_negative("feature_norm", self.feature_norm)
+        _validate_optional_non_negative("prediction_error", self.prediction_error)
+        _validate_optional_non_negative("us_per_sample", self.us_per_sample)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,4 +62,26 @@ class AdaptiveStepResult:
     features: tuple[float, ...]
     channels: AdaptiveChannels
     metrics: StepMetrics
-    extra: dict[str, Any] | None = None
+    state: ReservoirState | None = None
+
+    def __post_init__(self) -> None:
+        if self.prediction is not None and not math.isfinite(self.prediction):
+            msg = "prediction must be finite when provided"
+            raise ValueError(msg)
+        if not all(math.isfinite(feature) for feature in self.features):
+            msg = "features must contain only finite values"
+            raise ValueError(msg)
+
+
+def _validate_channel(name: str, value: float) -> None:
+    if not math.isfinite(value) or value < 0.0 or value > 1.0:
+        msg = f"{name} must be in the range [0.0, 1.0]"
+        raise ValueError(msg)
+
+
+def _validate_optional_non_negative(name: str, value: float | None) -> None:
+    if value is None:
+        return
+    if not math.isfinite(value) or value < 0.0:
+        msg = f"{name} must be finite and non-negative"
+        raise ValueError(msg)

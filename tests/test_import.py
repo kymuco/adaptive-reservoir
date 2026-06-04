@@ -1,11 +1,12 @@
 import pytest
 
 import adaptive_reservoir
-from adaptive_reservoir import AdaptiveReservoir, ReservoirConfig
+from adaptive_reservoir import AdaptiveReservoir, ReservoirConfig, ReservoirState
 
 
 def test_package_imports() -> None:
     assert adaptive_reservoir.__version__ == "0.0.0"
+    assert ReservoirState.zeros(n_cells=1).samples_seen == 0
 
 
 def test_public_api_draft_processes_one_step() -> None:
@@ -22,6 +23,7 @@ def test_public_api_draft_processes_one_step() -> None:
     assert result.channels.saturation == 0.0
     assert result.metrics.samples_seen == 1
     assert result.metrics.target_available is True
+    assert result.state is None
     assert model.samples_seen == 1
 
 
