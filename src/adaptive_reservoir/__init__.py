@@ -1,10 +1,8 @@
 """CPU-friendly temporal adaptation layer for software agents and streaming systems."""
 
-from adaptive_reservoir.core import AdaptiveChannels
-from adaptive_reservoir.core import AdaptiveReservoir
-from adaptive_reservoir.core import AdaptiveStepResult
-from adaptive_reservoir.core import ReservoirConfig
-from adaptive_reservoir.core import StepMetrics
+from adaptive_reservoir.core.adaptive_reservoir import AdaptiveReservoir
+from adaptive_reservoir.core.config import ReservoirConfig
+from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
 
 __version__ = "0.0.0"
 
