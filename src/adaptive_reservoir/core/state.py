@@ -81,7 +81,10 @@ def _readonly_float_vector(name: str, value: FloatArray) -> FloatArray:
 def _validate_matching_shapes(*arrays: FloatArray) -> None:
     expected_shape = arrays[0].shape
     if any(array.shape != expected_shape for array in arrays[1:]):
-        msg = "activations, fast_trace, mid_trace, and slow_trace must have the same shape"
+        msg = (
+            "activations, fast_trace, mid_trace, and slow_trace "
+            "must have the same shape"
+        )
         raise ValueError(msg)
 
 
