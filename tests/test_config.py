@@ -47,20 +47,17 @@ def test_invalid_n_cells_raises_clear_error(n_cells: int) -> None:
 
 
 @pytest.mark.parametrize(
-    ("field_name", "kwargs", "message"),
+    ("kwargs", "message"),
     [
-        ("topology", {"topology": "bad"}, "topology must be one of"),
-        ("feature_mode", {"feature_mode": "bad"}, "feature_mode must be one of"),
-        ("dtype", {"dtype": "bad"}, "dtype must be one of"),
+        ({"topology": "bad"}, "topology must be one of"),
+        ({"feature_mode": "bad"}, "feature_mode must be one of"),
+        ({"dtype": "bad"}, "dtype must be one of"),
     ],
 )
 def test_invalid_reservoir_choices_raise_clear_errors(
-    field_name: str,
-    kwargs: dict[str, str],
+    kwargs: dict[str, object],
     message: str,
 ) -> None:
-    del field_name
-
     with pytest.raises(ValueError, match=message):
         ReservoirConfig(input_dim=8, **kwargs)  # type: ignore[arg-type]
 
@@ -73,7 +70,10 @@ def test_invalid_reservoir_choices_raise_clear_errors(
         ({"slow_decay": 1.5}, "slow_decay must be in the range"),
     ],
 )
-def test_invalid_trace_config_raises_clear_errors(kwargs: dict[str, float], message: str) -> None:
+def test_invalid_trace_config_raises_clear_errors(
+    kwargs: dict[str, float],
+    message: str,
+) -> None:
     with pytest.raises(ValueError, match=message):
         TraceConfig(**kwargs)
 
@@ -89,7 +89,10 @@ def test_invalid_trace_config_raises_clear_errors(kwargs: dict[str, float], mess
         ({"update_interval": 0}, "update_interval must be positive"),
     ],
 )
-def test_invalid_readout_config_raises_clear_errors(kwargs: dict[str, object], message: str) -> None:
+def test_invalid_readout_config_raises_clear_errors(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
     with pytest.raises(ValueError, match=message):
         ReadoutConfig(**kwargs)  # type: ignore[arg-type]
 
@@ -105,6 +108,9 @@ def test_invalid_readout_config_raises_clear_errors(kwargs: dict[str, object], m
         ({"epsilon": 0.0}, "epsilon must be positive"),
     ],
 )
-def test_invalid_channel_config_raises_clear_errors(kwargs: dict[str, object], message: str) -> None:
+def test_invalid_channel_config_raises_clear_errors(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
     with pytest.raises(ValueError, match=message):
         ChannelConfig(**kwargs)  # type: ignore[arg-type]
