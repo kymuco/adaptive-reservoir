@@ -1,6 +1,11 @@
 import numpy as np
 
-from adaptive_reservoir import AdaptiveReservoir, AdaptiveStepResult, ReservoirConfig, ReservoirState
+from adaptive_reservoir import (
+    AdaptiveReservoir,
+    AdaptiveStepResult,
+    ReservoirConfig,
+    ReservoirState,
+)
 
 StreamItem = tuple[tuple[float, ...], float | None]
 DeterministicResultView = tuple[object, ...]
@@ -52,7 +57,10 @@ def _example_stream() -> tuple[StreamItem, ...]:
     )
 
 
-def _run_stream(model: AdaptiveReservoir, stream: tuple[StreamItem, ...]) -> list[AdaptiveStepResult]:
+def _run_stream(
+    model: AdaptiveReservoir,
+    stream: tuple[StreamItem, ...],
+) -> list[AdaptiveStepResult]:
     return [model.step(x, target=target) for x, target in stream]
 
 
