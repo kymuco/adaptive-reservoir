@@ -10,6 +10,7 @@ import numpy as np
 
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.protocols import FloatArray
+from adaptive_reservoir.topology.edges import EdgeList
 
 _MODULAR_SMALL_WORLD_SEED_LABEL = "topology.modular_small_world"
 _INTRA_MODULE_WEIGHT = 1.0
@@ -17,7 +18,7 @@ _INTRA_MODULE_WEIGHT = 1.0
 
 @dataclass(frozen=True, slots=True)
 class ModularSmallWorldTopologyBuilder:
-    """Build dense matrices with local modules and cross-module shortcuts.
+    """Build edge lists with local modules and cross-module shortcuts.
 
     Matrix convention: ``weights[target_cell, source_cell]``.
     """
@@ -43,8 +44,8 @@ class ModularSmallWorldTopologyBuilder:
             msg = "rewire_prob must be finite and in the range [0.0, 1.0]"
             raise ValueError(msg)
 
-    def build(self, config: ReservoirConfig) -> FloatArray:
-        """Build a recurrent modular small-world weight matrix for ``config``."""
+    def build(self, config: ReservoirConfig) -> EdgeList:
+        """Build recurrent modular small-world edges for ``config``."""
 
         if config.topology != "modular_small_world":
             msg = "config.topology must be 'modular_small_world'"
@@ -54,17 +55,21 @@ class ModularSmallWorldTopologyBuilder:
         self._validate_modules(config.n_cells, modules)
 
         dtype = np.dtype(config.dtype)
-        weights = np.zeros((config.n_cells, config.n_cells), dtype=dtype)
         rng = np.random.default_rng(
             _derive_seed(config.seed, _MODULAR_SMALL_WORLD_SEED_LABEL)
         )
         node_to_module = _node_to_module(modules)
+        sources: list[int] = []
+        targets: list[int] = []
+        weights: list[float] = []
 
         for module_id, module_nodes in enumerate(modules):
             for local_index, target in enumerate(module_nodes):
                 target_index = int(target)
                 connected_sources: set[int] = set()
                 self._add_intra_module_edges(
+                    sources=sources,
+                    targets=targets,
                     weights=weights,
                     rng=rng,
                     dtype=dtype,
@@ -76,6 +81,8 @@ class ModularSmallWorldTopologyBuilder:
                     connected_sources=connected_sources,
                 )
                 self._add_inter_module_shortcuts(
+                    sources=sources,
+                    targets=targets,
                     weights=weights,
                     rng=rng,
                     dtype=dtype,
@@ -85,7 +92,13 @@ class ModularSmallWorldTopologyBuilder:
                     connected_sources=connected_sources,
                 )
 
-        return weights
+        return EdgeList(
+            n_nodes=config.n_cells,
+            sources=np.array(sources, dtype=np.int64),
+            targets=np.array(targets, dtype=np.int64),
+            weights=np.array(weights, dtype=dtype),
+            module_ids=np.array(node_to_module, dtype=np.int64),
+        )
 
     def _validate_modules(
         self,
@@ -120,7 +133,9 @@ class ModularSmallWorldTopologyBuilder:
     def _add_intra_module_edges(
         self,
         *,
-        weights: FloatArray,
+        sources: list[int],
+        targets: list[int],
+        weights: list[float],
         rng: np.random.Generator,
         dtype: np.dtype[np.floating],
         target: int,
@@ -149,12 +164,16 @@ class ModularSmallWorldTopologyBuilder:
                     )[0]
 
             connected_sources.add(source)
-            weights[target, source] = edge_weight
+            sources.append(source)
+            targets.append(target)
+            weights.append(float(edge_weight))
 
     def _add_inter_module_shortcuts(
         self,
         *,
-        weights: FloatArray,
+        sources: list[int],
+        targets: list[int],
+        weights: list[float],
         rng: np.random.Generator,
         dtype: np.dtype[np.floating],
         target: int,
@@ -174,12 +193,15 @@ class ModularSmallWorldTopologyBuilder:
             size=self.inter_module_shortcuts,
             replace=False,
         )
-        connected_sources.update(int(source) for source in shortcut_sources)
-        weights[target, shortcut_sources] = _sample_non_zero_weights(
+        shortcut_weights = _sample_non_zero_weights(
             rng=rng,
             size=self.inter_module_shortcuts,
             dtype=dtype,
         )
+        connected_sources.update(int(source) for source in shortcut_sources)
+        sources.extend(int(source) for source in shortcut_sources)
+        targets.extend([target] * self.inter_module_shortcuts)
+        weights.extend(float(weight) for weight in shortcut_weights)
 
 
 def _module_indices(n_cells: int, n_modules: int) -> tuple[np.ndarray, ...]:
