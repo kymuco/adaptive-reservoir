@@ -13,6 +13,7 @@ from adaptive_reservoir.core.protocols import (
     ReadoutProtocol,
     TopologyBuilderProtocol,
 )
+from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
 from adaptive_reservoir.core.state import ReservoirState
 
@@ -26,6 +27,7 @@ __all__ = [
     "ReadoutConfig",
     "ReadoutProtocol",
     "ReservoirConfig",
+    "ReservoirCore",
     "ReservoirState",
     "StepMetrics",
     "TopologyBuilderProtocol",
