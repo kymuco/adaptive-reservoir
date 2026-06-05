@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
 from numpy.typing import NDArray
@@ -11,7 +11,9 @@ from numpy.typing import NDArray
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.result import AdaptiveChannels
 from adaptive_reservoir.core.state import ReservoirState
-from adaptive_reservoir.topology.edges import EdgeList
+
+if TYPE_CHECKING:
+    from adaptive_reservoir.topology.edges import EdgeList
 
 FloatArray = NDArray[np.floating]
 
