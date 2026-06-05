@@ -10,13 +10,14 @@ import numpy as np
 
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.protocols import FloatArray
+from adaptive_reservoir.topology.edges import EdgeList
 
 _RING_SHORTCUTS_SEED_LABEL = "topology.ring_shortcuts"
 
 
 @dataclass(frozen=True, slots=True)
 class RingShortcutsTopologyBuilder:
-    """Build dense matrices with ring edges and random shortcut inputs.
+    """Build ring edge lists with random shortcut inputs.
 
     Matrix convention: ``weights[target_cell, source_cell]``.
     """
@@ -34,12 +35,14 @@ class RingShortcutsTopologyBuilder:
         if not math.isfinite(self.ring_weight) or self.ring_weight == 0.0:
             msg = "ring_weight must be finite and non-zero"
             raise ValueError(msg)
-        if not math.isfinite(self.shortcut_weight_scale) or self.shortcut_weight_scale <= 0.0:
+        if not math.isfinite(self.shortcut_weight_scale) or (
+            self.shortcut_weight_scale <= 0.0
+        ):
             msg = "shortcut_weight_scale must be finite and positive"
             raise ValueError(msg)
 
-    def build(self, config: ReservoirConfig) -> FloatArray:
-        """Build a recurrent ring-shortcuts weight matrix for ``config``."""
+    def build(self, config: ReservoirConfig) -> EdgeList:
+        """Build recurrent ring-shortcuts edges for ``config``."""
 
         if config.topology != "ring_shortcuts":
             msg = "config.topology must be 'ring_shortcuts'"
@@ -48,15 +51,21 @@ class RingShortcutsTopologyBuilder:
 
         dtype = np.dtype(config.dtype)
         shortcut_scale = self._validated_shortcut_scale(dtype)
-        weights = np.zeros((config.n_cells, config.n_cells), dtype=dtype)
         rng = np.random.default_rng(
             _derive_seed(config.seed, _RING_SHORTCUTS_SEED_LABEL)
         )
+        sources: list[int] = []
+        targets: list[int] = []
+        weights: list[float] = []
 
         for target in range(config.n_cells):
-            protected_sources = set(_ring_sources(target, config.n_cells, self.bidirectional))
-            for source in protected_sources:
-                weights[target, source] = self.ring_weight
+            protected_sources = set(
+                _ring_sources(target, config.n_cells, self.bidirectional)
+            )
+            for source in sorted(protected_sources):
+                sources.append(source)
+                targets.append(target)
+                weights.append(self.ring_weight)
 
             shortcut_sources = rng.choice(
                 _shortcut_candidates(
@@ -68,14 +77,22 @@ class RingShortcutsTopologyBuilder:
                 size=self.shortcuts_per_node,
                 replace=False,
             )
-            weights[target, shortcut_sources] = _sample_non_zero_weights(
+            shortcut_weights = _sample_non_zero_weights(
                 rng=rng,
                 size=self.shortcuts_per_node,
                 dtype=dtype,
                 weight_scale=shortcut_scale,
             )
+            sources.extend(int(source) for source in shortcut_sources)
+            targets.extend([target] * self.shortcuts_per_node)
+            weights.extend(float(weight) for weight in shortcut_weights)
 
-        return weights
+        return EdgeList(
+            n_nodes=config.n_cells,
+            sources=np.array(sources, dtype=np.int64),
+            targets=np.array(targets, dtype=np.int64),
+            weights=np.array(weights, dtype=dtype),
+        )
 
     def _validate_n_cells(self, n_cells: int) -> None:
         min_cells = 3 if self.bidirectional else 2
