@@ -9,6 +9,7 @@ from adaptive_reservoir import (
 
 StreamItem = tuple[tuple[float, ...], float | None]
 DeterministicResultView = tuple[object, ...]
+DeterministicStateView = tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...], tuple[float, ...], int]
 
 
 def test_zero_initial_state_is_deterministic_for_same_shape_and_dtype() -> None:
@@ -77,5 +78,17 @@ def _deterministic_view(result: AdaptiveStepResult) -> DeterministicResultView:
         metrics.state_norm,
         metrics.feature_norm,
         metrics.prediction_error,
-        result.state,
+        _state_view(result.state),
+    )
+
+
+def _state_view(state: ReservoirState | None) -> DeterministicStateView | None:
+    if state is None:
+        return None
+    return (
+        tuple(float(value) for value in state.activations),
+        tuple(float(value) for value in state.fast_trace),
+        tuple(float(value) for value in state.mid_trace),
+        tuple(float(value) for value in state.slow_trace),
+        state.samples_seen,
     )
