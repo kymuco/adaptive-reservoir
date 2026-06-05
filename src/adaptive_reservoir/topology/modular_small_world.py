@@ -79,6 +79,7 @@ class ModularSmallWorldTopologyBuilder:
                     weights=weights,
                     rng=rng,
                     dtype=dtype,
+                    target=target_index,
                     module_id=module_id,
                     node_to_module=node_to_module,
                     connected_sources=connected_sources,
@@ -156,6 +157,7 @@ class ModularSmallWorldTopologyBuilder:
         weights: FloatArray,
         rng: np.random.Generator,
         dtype: np.dtype[np.floating],
+        target: int,
         module_id: int,
         node_to_module: tuple[int, ...],
         connected_sources: set[int],
@@ -173,8 +175,11 @@ class ModularSmallWorldTopologyBuilder:
             replace=False,
         )
         connected_sources.update(int(source) for source in shortcut_sources)
-        weights[:, shortcut_sources] = weights[:, shortcut_sources]
-        return shortcut_sources
+        weights[target, shortcut_sources] = _sample_non_zero_weights(
+            rng=rng,
+            size=self.inter_module_shortcuts,
+            dtype=dtype,
+        )
 
 
 def _module_indices(n_cells: int, n_modules: int) -> tuple[np.ndarray, ...]:
