@@ -37,7 +37,9 @@ class ModularSmallWorldTopologyBuilder:
         if self.inter_module_shortcuts < 0:
             msg = "inter_module_shortcuts must be non-negative"
             raise ValueError(msg)
-        if not math.isfinite(self.rewire_prob) or not 0.0 <= self.rewire_prob <= 1.0:
+        if not math.isfinite(self.rewire_prob) or not (
+            0.0 <= self.rewire_prob <= 1.0
+        ):
             msg = "rewire_prob must be finite and in the range [0.0, 1.0]"
             raise ValueError(msg)
 
@@ -172,6 +174,7 @@ class ModularSmallWorldTopologyBuilder:
             size=self.inter_module_shortcuts,
             replace=False,
         )
+        connected_sources.update(int(source) for source in shortcut_sources)
         weights[target, shortcut_sources] = _sample_non_zero_weights(
             rng=rng,
             size=self.inter_module_shortcuts,
