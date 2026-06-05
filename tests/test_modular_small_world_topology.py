@@ -97,7 +97,7 @@ def test_modular_small_world_topology_changes_with_seed() -> None:
     assert not np.array_equal(left, right)
 
 
-def test_modular_small_world_topology_rewires_intra_edges_to_cross_module_edges() -> None:
+def test_modular_small_world_topology_rewires_to_cross_module_edges() -> None:
     config = _config(n_cells=12)
     builder = ModularSmallWorldTopologyBuilder(
         n_modules=3,
@@ -152,7 +152,10 @@ def test_modular_small_world_topology_validates_topology_name() -> None:
     [
         ({"n_modules": 1}, "n_modules must be >= 2"),
         ({"intra_module_degree": 0}, "intra_module_degree must be positive"),
-        ({"inter_module_shortcuts": -1}, "inter_module_shortcuts must be non-negative"),
+        (
+            {"inter_module_shortcuts": -1},
+            "inter_module_shortcuts must be non-negative",
+        ),
         ({"rewire_prob": -0.1}, "rewire_prob must be finite"),
         ({"rewire_prob": 1.1}, "rewire_prob must be finite"),
         ({"rewire_prob": float("nan")}, "rewire_prob must be finite"),
@@ -207,10 +210,7 @@ def test_modular_small_world_topology_validates_rewire_capacity() -> None:
         rewire_prob=0.5,
     )
 
-    with pytest.raises(
-        ValueError,
-        match="intra_module_degree \+ inter_module_shortcuts",
-    ):
+    with pytest.raises(ValueError, match="when rewire_prob > 0"):
         builder.build(config)
 
 
