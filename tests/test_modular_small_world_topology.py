@@ -4,20 +4,35 @@ import numpy as np
 import pytest
 
 from adaptive_reservoir import ReservoirConfig, TopologyBuilderProtocol
-from adaptive_reservoir.topology import ModularSmallWorldTopologyBuilder
+from adaptive_reservoir.topology import EdgeList, ModularSmallWorldTopologyBuilder
 
 
 def test_modular_small_world_builder_satisfies_topology_protocol() -> None:
     assert isinstance(ModularSmallWorldTopologyBuilder(), TopologyBuilderProtocol)
 
 
+def test_modular_small_world_topology_returns_edge_list() -> None:
+    config = _config(n_cells=12)
+    edge_list = ModularSmallWorldTopologyBuilder(
+        n_modules=3,
+        intra_module_degree=2,
+        inter_module_shortcuts=2,
+        rewire_prob=0.0,
+    ).build(config)
+
+    assert isinstance(edge_list, EdgeList)
+    assert edge_list.n_nodes == 12
+    assert edge_list.n_edges == 48
+
+
 def test_modular_small_world_topology_has_expected_shape_and_dtype() -> None:
     config = _config(n_cells=12, dtype="float32")
-    weights = ModularSmallWorldTopologyBuilder(
+    edge_list = ModularSmallWorldTopologyBuilder(
         n_modules=3,
         intra_module_degree=2,
         inter_module_shortcuts=1,
     ).build(config)
+    weights = edge_list.to_dense()
 
     assert weights.shape == (12, 12)
     assert weights.dtype == np.float32
@@ -32,7 +47,7 @@ def test_modular_small_world_topology_has_local_intra_module_edges() -> None:
         rewire_prob=0.0,
     )
 
-    weights = builder.build(config)
+    weights = builder.build(config).to_dense()
 
     np.testing.assert_array_equal(
         np.count_nonzero(weights, axis=1),
@@ -51,7 +66,8 @@ def test_modular_small_world_topology_adds_fixed_inter_module_shortcuts() -> Non
         rewire_prob=0.0,
     )
 
-    weights = builder.build(config)
+    edge_list = builder.build(config)
+    weights = edge_list.to_dense()
 
     np.testing.assert_array_equal(
         np.count_nonzero(weights, axis=1),
@@ -66,6 +82,27 @@ def test_modular_small_world_topology_adds_fixed_inter_module_shortcuts() -> Non
         assert same_module_count == 2
         assert cross_module_count == 2
 
+    metrics = edge_list.metrics()
+    assert metrics.in_degree_stats.minimum == 4
+    assert metrics.in_degree_stats.maximum == 4
+    assert metrics.in_degree_stats.mean == 4.0
+    assert metrics.module_count == 3
+
+
+def test_modular_small_world_topology_has_expected_metrics() -> None:
+    config = _config(n_cells=12)
+    edge_list = ModularSmallWorldTopologyBuilder(
+        n_modules=3,
+        intra_module_degree=2,
+        inter_module_shortcuts=2,
+        rewire_prob=0.0,
+    ).build(config)
+    metrics = edge_list.metrics()
+
+    assert metrics.active_edge_ratio == 48 / 144
+    assert metrics.out_degree_stats.mean == 4.0
+    assert metrics.module_count == 3
+
 
 def test_modular_small_world_topology_is_seeded() -> None:
     config = _config(n_cells=12, seed=42)
@@ -79,7 +116,9 @@ def test_modular_small_world_topology_is_seeded() -> None:
     left = builder.build(config)
     right = builder.build(config)
 
-    np.testing.assert_array_equal(left, right)
+    np.testing.assert_array_equal(left.sources, right.sources)
+    np.testing.assert_array_equal(left.targets, right.targets)
+    np.testing.assert_array_equal(left.weights, right.weights)
 
 
 def test_modular_small_world_topology_changes_with_seed() -> None:
@@ -91,8 +130,8 @@ def test_modular_small_world_topology_changes_with_seed() -> None:
         rewire_prob=0.5,
     )
 
-    left = builder.build(config)
-    right = builder.build(replace(config, seed=43))
+    left = builder.build(config).to_dense()
+    right = builder.build(replace(config, seed=43)).to_dense()
 
     assert not np.array_equal(left, right)
 
@@ -106,7 +145,8 @@ def test_modular_small_world_topology_rewires_to_cross_module_edges() -> None:
         rewire_prob=1.0,
     )
 
-    weights = builder.build(config)
+    edge_list = builder.build(config)
+    weights = edge_list.to_dense()
 
     np.testing.assert_array_equal(
         np.count_nonzero(weights, axis=1),
@@ -131,7 +171,7 @@ def test_modular_small_world_topology_has_no_self_loops() -> None:
         rewire_prob=0.5,
     )
 
-    weights = builder.build(config)
+    weights = builder.build(config).to_dense()
 
     np.testing.assert_array_equal(np.diag(weights), np.zeros(config.n_cells))
 
