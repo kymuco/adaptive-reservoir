@@ -13,6 +13,13 @@ def test_reservoir_core_initializes_zero_state() -> None:
     assert core.state.samples_seen == 0
 
 
+def test_reservoir_core_supports_default_small_modular_topology() -> None:
+    core = ReservoirCore.from_config(ReservoirConfig(input_dim=2, n_cells=4))
+
+    assert core.recurrent_edges.n_nodes == 4
+    assert core.input_weights.shape == (4, 2)
+
+
 def test_reservoir_core_builds_input_projection_shape_and_dtype() -> None:
     core = ReservoirCore.from_config(_config(dtype="float32"))
 
@@ -124,12 +131,7 @@ def test_reservoir_core_validates_recurrent_edge_count() -> None:
     with pytest.raises(ValueError, match="recurrent_edges.n_nodes must match"):
         ReservoirCore(
             config=config,
-            recurrent_edges=EdgeList(
-                n_nodes=3,
-                sources=np.array([0]),
-                targets=np.array([1]),
-                weights=np.array([1.0]),
-            ),
+            recurrent_edges=_manual_edges(n_nodes=3),
             input_weights=np.zeros((4, 2)),
             state=ReservoirState.zeros(n_cells=4),
         )
@@ -140,7 +142,7 @@ def test_reservoir_core_validates_input_weight_shape() -> None:
     with pytest.raises(ValueError, match="input_weights must have shape"):
         ReservoirCore(
             config=config,
-            recurrent_edges=_manual_edges(),
+            recurrent_edges=_manual_edges(n_nodes=4),
             input_weights=np.zeros((3, 2)),
             state=ReservoirState.zeros(n_cells=4),
         )
@@ -171,7 +173,7 @@ def _manual_core(*, leak_rate: float, fatigue_rate: float = 0.0) -> ReservoirCor
     )
     return ReservoirCore(
         config=config,
-        recurrent_edges=_manual_edges(),
+        recurrent_edges=_manual_edges(n_nodes=3),
         input_weights=np.array(
             [
                 [1.0, 0.0],
@@ -183,9 +185,9 @@ def _manual_core(*, leak_rate: float, fatigue_rate: float = 0.0) -> ReservoirCor
     )
 
 
-def _manual_edges() -> EdgeList:
+def _manual_edges(*, n_nodes: int) -> EdgeList:
     return EdgeList(
-        n_nodes=3,
+        n_nodes=n_nodes,
         sources=np.array([0]),
         targets=np.array([1]),
         weights=np.array([0.5]),
