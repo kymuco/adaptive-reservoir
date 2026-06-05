@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -92,6 +93,10 @@ class ReservoirConfig:
     feature_mode: FeatureMode = "state_slow_raw"
     seed: int = 0
     dtype: DTypeName = "float64"
+    leak_rate: float = 0.3
+    input_scale: float = 1.0
+    recurrent_scale: float = 1.0
+    fatigue_rate: float = 0.0
     trace: TraceConfig = field(default_factory=TraceConfig)
     readout: ReadoutConfig = field(default_factory=ReadoutConfig)
     channels: ChannelConfig = field(default_factory=ChannelConfig)
@@ -108,6 +113,10 @@ class ReservoirConfig:
         _validate_choice("topology", self.topology, TOPOLOGY_NAMES)
         _validate_choice("feature_mode", self.feature_mode, FEATURE_MODES)
         _validate_choice("dtype", self.dtype, DTYPE_NAMES)
+        _validate_unit_interval_open_closed("leak_rate", self.leak_rate)
+        _validate_positive_float("input_scale", self.input_scale)
+        _validate_non_negative_float("recurrent_scale", self.recurrent_scale)
+        _validate_non_negative_float("fatigue_rate", self.fatigue_rate)
 
 
 def _validate_choice(name: str, value: str, allowed: frozenset[str]) -> None:
@@ -126,4 +135,22 @@ def _validate_decay(name: str, value: float) -> None:
 def _validate_positive_int(name: str, value: int) -> None:
     if value <= 0:
         msg = f"{name} must be positive"
+        raise ValueError(msg)
+
+
+def _validate_unit_interval_open_closed(name: str, value: float) -> None:
+    if not math.isfinite(value) or value <= 0.0 or value > 1.0:
+        msg = f"{name} must be in the range (0.0, 1.0]"
+        raise ValueError(msg)
+
+
+def _validate_positive_float(name: str, value: float) -> None:
+    if not math.isfinite(value) or value <= 0.0:
+        msg = f"{name} must be finite and positive"
+        raise ValueError(msg)
+
+
+def _validate_non_negative_float(name: str, value: float) -> None:
+    if not math.isfinite(value) or value < 0.0:
+        msg = f"{name} must be finite and non-negative"
         raise ValueError(msg)
