@@ -100,7 +100,9 @@ def test_reservoir_core_step_applies_fatigue_rate() -> None:
     state = core.step([0.0, 0.0])
 
     previous = np.tanh(np.array([1.0, 0.0, 0.0]))
-    expected_pre_activation = np.array([-0.5 * previous[0], previous[0] * 0.5, 0.0])
+    expected_pre_activation = np.array(
+        [-0.5 * previous[0], previous[0] * 0.5, 0.0]
+    )
     np.testing.assert_allclose(state.activations, np.tanh(expected_pre_activation))
 
 
