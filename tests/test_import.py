@@ -7,7 +7,8 @@ from adaptive_reservoir import AdaptiveReservoir, ReservoirConfig, ReservoirCore
 def test_package_imports() -> None:
     assert adaptive_reservoir.__version__ == "0.0.0"
     assert ReservoirState.zeros(n_cells=1).samples_seen == 0
-    assert ReservoirCore.from_config(ReservoirConfig(input_dim=1, n_cells=4)).state.samples_seen == 0
+    core = ReservoirCore.from_config(ReservoirConfig(input_dim=1, n_cells=4))
+    assert core.state.samples_seen == 0
 
 
 def test_public_api_processes_one_reservoir_step() -> None:
