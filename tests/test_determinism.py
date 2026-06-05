@@ -9,7 +9,13 @@ from adaptive_reservoir import (
 
 StreamItem = tuple[tuple[float, ...], float | None]
 DeterministicResultView = tuple[object, ...]
-DeterministicStateView = tuple[tuple[float, ...], tuple[float, ...], tuple[float, ...], tuple[float, ...], int]
+DeterministicStateView = tuple[
+    tuple[float, ...],
+    tuple[float, ...],
+    tuple[float, ...],
+    tuple[float, ...],
+    int,
+]
 
 
 def test_zero_initial_state_is_deterministic_for_same_shape_and_dtype() -> None:
