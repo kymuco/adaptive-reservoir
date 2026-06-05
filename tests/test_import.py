@@ -1,7 +1,13 @@
 import pytest
 
 import adaptive_reservoir
-from adaptive_reservoir import AdaptiveReservoir, ReservoirConfig, ReservoirCore, ReservoirState
+from adaptive_reservoir import (
+    AdaptiveReservoir,
+    ReservoirConfig,
+    ReservoirCore,
+    ReservoirState,
+    extract_features,
+)
 
 
 def test_package_imports() -> None:
@@ -9,6 +15,7 @@ def test_package_imports() -> None:
     assert ReservoirState.zeros(n_cells=1).samples_seen == 0
     core = ReservoirCore.from_config(ReservoirConfig(input_dim=1, n_cells=4))
     assert core.state.samples_seen == 0
+    assert len(extract_features(core.state, "state_raw")) == 4
 
 
 def test_public_api_processes_one_reservoir_step() -> None:
@@ -17,7 +24,7 @@ def test_public_api_processes_one_reservoir_step() -> None:
     result = model.step([0.1, -0.2], target=1.0)
 
     assert result.prediction is None
-    assert len(result.features) == model.config.n_cells
+    assert len(result.features) == 2 * model.config.n_cells
     assert result.channels.novelty == 0.0
     assert result.channels.stability == 1.0
     assert result.channels.drift_pressure == 0.0

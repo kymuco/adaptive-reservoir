@@ -16,6 +16,7 @@ from adaptive_reservoir.core.protocols import (
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
 from adaptive_reservoir.core.state import ReservoirState
+from adaptive_reservoir.features import extract_features
 
 __all__ = [
     "AdaptiveChannels",
@@ -32,4 +33,5 @@ __all__ = [
     "StepMetrics",
     "TopologyBuilderProtocol",
     "TraceConfig",
+    "extract_features",
 ]

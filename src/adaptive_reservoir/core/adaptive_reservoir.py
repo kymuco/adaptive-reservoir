@@ -9,14 +9,14 @@ from collections.abc import Sequence
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir.features import extract_features
 
 
 class AdaptiveReservoir:
     """High-level facade for the adaptive-reservoir public API.
 
-    PR3.1 wires the public facade to the minimal stateful reservoir core. Readouts,
-    trace updates, feature modes, diagnostics, and channel calculations are added
-    by later milestones.
+    PR3.3 wires built-in feature modes into the public facade. Readouts,
+    diagnostics, and channel calculations are added by later milestones.
     """
 
     def __init__(self, config: ReservoirConfig) -> None:
@@ -39,7 +39,8 @@ class AdaptiveReservoir:
 
         state = self._core.step(x)
         elapsed_us = (time.perf_counter() - start) * 1_000_000.0
-        features = tuple(float(value) for value in state.activations)
+        features_array = extract_features(state, self.config.feature_mode)
+        features = tuple(float(value) for value in features_array)
         return AdaptiveStepResult(
             prediction=None,
             features=features,
@@ -68,5 +69,5 @@ class AdaptiveReservoir:
         return {
             "samples_seen": self.samples_seen,
             "config": self.config,
-            "api_stage": "reservoir_core_v1",
+            "api_stage": "feature_modes_v1",
         }

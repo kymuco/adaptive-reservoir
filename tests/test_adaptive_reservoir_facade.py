@@ -16,14 +16,34 @@ def test_adaptive_reservoir_step_returns_stateful_result() -> None:
     assert model.samples_seen == 1
 
 
-def test_adaptive_reservoir_step_features_are_state_activations_for_pr31() -> None:
+def test_adaptive_reservoir_default_features_are_state_slow_raw() -> None:
     model = AdaptiveReservoir(_config())
 
     result = model.step([0.5, -0.25])
 
     assert result.state is not None
-    assert len(result.features) == 4
-    np.testing.assert_allclose(result.features, result.state.activations)
+    expected = np.concatenate((result.state.activations, result.state.slow_trace))
+    assert len(result.features) == 8
+    np.testing.assert_allclose(result.features, expected)
+
+
+@pytest.mark.parametrize(
+    ("feature_mode", "expected_length"),
+    [
+        ("state_raw", 4),
+        ("state_slow_raw", 8),
+        ("multi_raw", 16),
+    ],
+)
+def test_adaptive_reservoir_step_uses_configured_feature_mode(
+    feature_mode: str,
+    expected_length: int,
+) -> None:
+    model = AdaptiveReservoir(_config(feature_mode=feature_mode))
+
+    result = model.step([0.5, -0.25])
+
+    assert len(result.features) == expected_length
 
 
 def test_adaptive_reservoir_step_increments_samples_seen() -> None:
@@ -69,7 +89,7 @@ def test_adaptive_reservoir_reset_reinitializes_core_state() -> None:
     assert result.metrics.samples_seen == 1
 
 
-def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr31() -> None:
+def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr33() -> None:
     model = AdaptiveReservoir(_config())
     model.step([0.5, -0.25])
 
@@ -77,13 +97,14 @@ def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr31() -> None:
 
     assert snapshot["samples_seen"] == 1
     assert snapshot["config"] == model.config
-    assert snapshot["api_stage"] == "reservoir_core_v1"
+    assert snapshot["api_stage"] == "feature_modes_v1"
 
 
-def _config() -> ReservoirConfig:
+def _config(*, feature_mode: str = "state_slow_raw") -> ReservoirConfig:
     return ReservoirConfig(
         input_dim=2,
         n_cells=4,
         topology="ring_shortcuts",
         seed=42,
+        feature_mode=feature_mode,  # type: ignore[arg-type]
     )
