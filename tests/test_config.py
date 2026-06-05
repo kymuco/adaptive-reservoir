@@ -14,6 +14,10 @@ def test_default_config_is_valid() -> None:
     assert config.feature_mode == "state_slow_raw"
     assert config.seed == 0
     assert config.dtype == "float64"
+    assert config.leak_rate == 0.3
+    assert config.input_scale == 1.0
+    assert config.recurrent_scale == 1.0
+    assert config.fatigue_rate == 0.0
     assert config.trace_decays == (0.5, 0.9, 0.99)
     assert config.readout.name == "sliding_ridge"
     assert config.channels.saturation_threshold == 0.95
@@ -60,6 +64,26 @@ def test_invalid_reservoir_choices_raise_clear_errors(
 ) -> None:
     with pytest.raises(ValueError, match=message):
         ReservoirConfig(input_dim=8, **kwargs)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "message"),
+    [
+        ({"leak_rate": 0.0}, "leak_rate must be in the range"),
+        ({"leak_rate": 1.1}, "leak_rate must be in the range"),
+        ({"leak_rate": float("nan")}, "leak_rate must be in the range"),
+        ({"input_scale": 0.0}, "input_scale must be finite and positive"),
+        ({"input_scale": float("inf")}, "input_scale must be finite and positive"),
+        ({"recurrent_scale": -0.1}, "recurrent_scale must be finite and non-negative"),
+        ({"fatigue_rate": -0.1}, "fatigue_rate must be finite and non-negative"),
+    ],
+)
+def test_invalid_reservoir_update_values_raise_clear_errors(
+    kwargs: dict[str, object],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        ReservoirConfig(input_dim=8, **kwargs)
 
 
 @pytest.mark.parametrize(
