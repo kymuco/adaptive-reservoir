@@ -26,8 +26,8 @@ _INPUT_PROJECTION_SEED_LABEL = "core.input_projection"
 class ReservoirCore:
     """Minimal stateful reservoir substrate.
 
-    PR3.1 intentionally implements only the core step function. Trace updates,
-    feature modes, diagnostics, readouts, and recurrent plasticity are added by
+    PR3.2 updates multi-timescale traces from the post-leaky reservoir state.
+    Feature modes, diagnostics, readouts, and recurrent plasticity are added by
     later PRs.
     """
 
@@ -93,11 +93,24 @@ class ReservoirCore:
             + self.config.leak_rate * candidate
         ).astype(self.input_weights.dtype, copy=False)
 
+        trace_config = self.config.trace
         self.state = ReservoirState(
             activations=new_activations,
-            fast_trace=self.state.fast_trace,
-            mid_trace=self.state.mid_trace,
-            slow_trace=self.state.slow_trace,
+            fast_trace=_update_trace(
+                self.state.fast_trace,
+                new_activations,
+                trace_config.fast_decay,
+            ),
+            mid_trace=_update_trace(
+                self.state.mid_trace,
+                new_activations,
+                trace_config.mid_decay,
+            ),
+            slow_trace=_update_trace(
+                self.state.slow_trace,
+                new_activations,
+                trace_config.slow_decay,
+            ),
             samples_seen=self.state.samples_seen + 1,
         )
         return self.state
@@ -165,6 +178,13 @@ def _sparse_recurrent_drive(
     contributions = edges.weights.astype(dtype, copy=False) * state[edges.sources]
     np.add.at(drive, edges.targets, contributions)
     return drive
+
+
+def _update_trace(old_trace: FloatArray, state: FloatArray, decay: float) -> FloatArray:
+    return (decay * old_trace + (1.0 - decay) * state).astype(
+        state.dtype,
+        copy=False,
+    )
 
 
 def _validate_input_vector(x: Sequence[float], *, input_dim: int) -> FloatArray:
