@@ -105,13 +105,43 @@ class ReservoirCore:
 
 def _default_topology_builder(config: ReservoirConfig) -> TopologyBuilderProtocol:
     if config.topology == "random_sparse":
-        return RandomSparseTopologyBuilder()
+        return _default_random_sparse_builder(config.n_cells)
     if config.topology == "ring_shortcuts":
-        return RingShortcutsTopologyBuilder()
+        return _default_ring_shortcuts_builder(config.n_cells)
     if config.topology == "modular_small_world":
-        return ModularSmallWorldTopologyBuilder()
+        return _default_modular_small_world_builder(config.n_cells)
     msg = f"unsupported topology: {config.topology!r}"
     raise ValueError(msg)
+
+
+def _default_random_sparse_builder(n_cells: int) -> RandomSparseTopologyBuilder:
+    if n_cells == 1:
+        return RandomSparseTopologyBuilder(in_degree=1, allow_self_loops=True)
+    return RandomSparseTopologyBuilder(in_degree=min(8, n_cells - 1))
+
+
+def _default_ring_shortcuts_builder(n_cells: int) -> RingShortcutsTopologyBuilder:
+    if n_cells < 2:
+        msg = "ring_shortcuts topology requires n_cells >= 2"
+        raise ValueError(msg)
+    if n_cells == 2:
+        return RingShortcutsTopologyBuilder(shortcuts_per_node=0, bidirectional=False)
+    return RingShortcutsTopologyBuilder(shortcuts_per_node=min(1, n_cells - 3))
+
+
+def _default_modular_small_world_builder(n_cells: int) -> ModularSmallWorldTopologyBuilder:
+    if n_cells < 4:
+        msg = "modular_small_world topology requires n_cells >= 4"
+        raise ValueError(msg)
+    n_modules = min(4, max(2, n_cells // 2))
+    min_module_size = n_cells // n_modules
+    intra_module_degree = min(3, min_module_size - 1)
+    inter_module_shortcuts = min(1, n_cells - min_module_size)
+    return ModularSmallWorldTopologyBuilder(
+        n_modules=n_modules,
+        intra_module_degree=intra_module_degree,
+        inter_module_shortcuts=inter_module_shortcuts,
+    )
 
 
 def _build_input_projection(config: ReservoirConfig) -> FloatArray:
