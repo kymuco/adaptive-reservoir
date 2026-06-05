@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from adaptive_reservoir import ReservoirConfig, ReservoirCore, ReservoirState
+from adaptive_reservoir import ReservoirConfig, ReservoirCore, ReservoirState, TraceConfig
 from adaptive_reservoir.topology import EdgeList
 
 
@@ -104,17 +104,80 @@ def test_reservoir_core_step_applies_fatigue_rate() -> None:
     np.testing.assert_allclose(state.activations, np.tanh(expected_pre_activation))
 
 
-def test_reservoir_core_step_preserves_traces_for_pr31() -> None:
+def test_reservoir_core_step_updates_default_traces_from_post_leaky_state() -> None:
     core = _manual_core(leak_rate=1.0)
-    fast_trace = core.state.fast_trace
-    mid_trace = core.state.mid_trace
-    slow_trace = core.state.slow_trace
 
     state = core.step([0.5, -1.0])
 
-    np.testing.assert_array_equal(state.fast_trace, fast_trace)
-    np.testing.assert_array_equal(state.mid_trace, mid_trace)
-    np.testing.assert_array_equal(state.slow_trace, slow_trace)
+    np.testing.assert_allclose(state.fast_trace, 0.5 * state.activations)
+    np.testing.assert_allclose(state.mid_trace, 0.1 * state.activations)
+    np.testing.assert_allclose(state.slow_trace, 0.01 * state.activations)
+
+
+def test_reservoir_core_step_uses_custom_trace_decays() -> None:
+    core = _manual_core(
+        leak_rate=1.0,
+        trace=TraceConfig(fast_decay=0.25, mid_decay=0.75, slow_decay=0.8),
+    )
+
+    state = core.step([0.5, -1.0])
+
+    np.testing.assert_allclose(state.fast_trace, 0.75 * state.activations)
+    np.testing.assert_allclose(state.mid_trace, 0.25 * state.activations)
+    np.testing.assert_allclose(state.slow_trace, 0.2 * state.activations)
+
+
+def test_reservoir_core_trace_decay_zero_tracks_current_state() -> None:
+    core = _manual_core(
+        leak_rate=1.0,
+        trace=TraceConfig(fast_decay=0.0, mid_decay=0.0, slow_decay=0.0),
+    )
+
+    state = core.step([0.5, -1.0])
+
+    np.testing.assert_allclose(state.fast_trace, state.activations)
+    np.testing.assert_allclose(state.mid_trace, state.activations)
+    np.testing.assert_allclose(state.slow_trace, state.activations)
+
+
+def test_reservoir_core_trace_decay_accumulates_previous_trace() -> None:
+    core = _manual_core(
+        leak_rate=1.0,
+        trace=TraceConfig(fast_decay=0.5, mid_decay=0.5, slow_decay=0.5),
+    )
+    first = core.step([1.0, 0.0])
+    first_trace = first.fast_trace.copy()
+
+    second = core.step([0.0, 0.0])
+
+    expected = 0.5 * first_trace + 0.5 * second.activations
+    np.testing.assert_allclose(second.fast_trace, expected)
+    np.testing.assert_allclose(second.mid_trace, expected)
+    np.testing.assert_allclose(second.slow_trace, expected)
+
+
+def test_reservoir_core_traces_use_post_leaky_state() -> None:
+    core = _manual_core(
+        leak_rate=0.25,
+        trace=TraceConfig(fast_decay=0.0, mid_decay=0.0, slow_decay=0.0),
+    )
+
+    state = core.step([0.5, -1.0])
+
+    np.testing.assert_allclose(state.fast_trace, state.activations)
+    np.testing.assert_allclose(state.mid_trace, state.activations)
+    np.testing.assert_allclose(state.slow_trace, state.activations)
+
+
+def test_reservoir_core_reset_reinitializes_traces_to_zero() -> None:
+    core = ReservoirCore.from_config(_config())
+    core.step([0.5, -0.25])
+
+    core = ReservoirCore.from_config(core.config)
+
+    np.testing.assert_array_equal(core.state.fast_trace, np.zeros(4))
+    np.testing.assert_array_equal(core.state.mid_trace, np.zeros(4))
+    np.testing.assert_array_equal(core.state.slow_trace, np.zeros(4))
 
 
 def test_reservoir_core_step_keeps_state_finite() -> None:
@@ -162,7 +225,12 @@ def _config(
     )
 
 
-def _manual_core(*, leak_rate: float, fatigue_rate: float = 0.0) -> ReservoirCore:
+def _manual_core(
+    *,
+    leak_rate: float,
+    fatigue_rate: float = 0.0,
+    trace: TraceConfig | None = None,
+) -> ReservoirCore:
     config = ReservoirConfig(
         input_dim=2,
         n_cells=3,
@@ -170,6 +238,7 @@ def _manual_core(*, leak_rate: float, fatigue_rate: float = 0.0) -> ReservoirCor
         leak_rate=leak_rate,
         recurrent_scale=1.0,
         fatigue_rate=fatigue_rate,
+        trace=trace or TraceConfig(),
     )
     return ReservoirCore(
         config=config,
