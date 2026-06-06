@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from adaptive_reservoir import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir import AdaptiveChannels, AdaptiveStepResult, StepMetrics, TraceNorms
 
 
 def test_default_channels_are_normalized() -> None:
@@ -40,12 +40,43 @@ def test_step_metrics_accepts_zero_samples_seen() -> None:
     assert metrics.readout_updated is False
 
 
+def test_step_metrics_accepts_diagnostic_values() -> None:
+    metrics = StepMetrics(
+        samples_seen=1,
+        state_norm=1.0,
+        state_delta=0.5,
+        feature_norm=2.0,
+        saturation_rate=0.25,
+        trace_norms=TraceNorms(fast=0.1, mid=0.2, slow=0.3),
+    )
+
+    assert metrics.state_norm == 1.0
+    assert metrics.state_delta == 0.5
+    assert metrics.feature_norm == 2.0
+    assert metrics.saturation_rate == 0.25
+    assert metrics.trace_norms == TraceNorms(fast=0.1, mid=0.2, slow=0.3)
+
+
 @pytest.mark.parametrize(
     ("kwargs", "message"),
     [
         ({"samples_seen": -1}, "samples_seen must be non-negative"),
         ({"samples_seen": 0, "state_norm": -0.1}, "state_norm must be finite"),
+        ({"samples_seen": 0, "state_delta": -0.1}, "state_delta must be finite"),
         ({"samples_seen": 0, "feature_norm": math.nan}, "feature_norm must be finite"),
+        ({"samples_seen": 0, "saturation_rate": 1.1}, "saturation_rate must be in"),
+        (
+            {"samples_seen": 0, "trace_norms": TraceNorms(fast=-0.1, mid=0.0, slow=0.0)},
+            "trace_norms.fast must be finite",
+        ),
+        (
+            {"samples_seen": 0, "trace_norms": TraceNorms(fast=0.0, mid=math.nan, slow=0.0)},
+            "trace_norms.mid must be finite",
+        ),
+        (
+            {"samples_seen": 0, "trace_norms": TraceNorms(fast=0.0, mid=0.0, slow=math.inf)},
+            "trace_norms.slow must be finite",
+        ),
         ({"samples_seen": 0, "prediction_error": -0.1}, "prediction_error must be finite"),
         ({"samples_seen": 0, "us_per_sample": math.inf}, "us_per_sample must be finite"),
     ],
