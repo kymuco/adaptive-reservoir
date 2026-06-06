@@ -7,6 +7,7 @@ import time
 from collections.abc import Sequence
 
 from adaptive_reservoir.core.config import ReservoirConfig
+from adaptive_reservoir.core.diagnostics import calculate_state_diagnostics
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
 from adaptive_reservoir.features import extract_features
@@ -15,8 +16,8 @@ from adaptive_reservoir.features import extract_features
 class AdaptiveReservoir:
     """High-level facade for the adaptive-reservoir public API.
 
-    PR3.3 wires built-in feature modes into the public facade. Readouts,
-    diagnostics, and channel calculations are added by later milestones.
+    PR3.4 wires state diagnostics and the direct saturation channel into the
+    public facade. Readouts and richer channel calculators are added later.
     """
 
     def __init__(self, config: ReservoirConfig) -> None:
@@ -37,18 +38,30 @@ class AdaptiveReservoir:
             msg = "target must be finite when provided"
             raise ValueError(msg)
 
+        previous_state = self._core.state
         state = self._core.step(x)
-        elapsed_us = (time.perf_counter() - start) * 1_000_000.0
         features_array = extract_features(state, self.config.feature_mode)
+        diagnostics = calculate_state_diagnostics(
+            previous_state=previous_state,
+            current_state=state,
+            features=features_array,
+            saturation_threshold=self.config.channels.saturation_threshold,
+        )
+        elapsed_us = (time.perf_counter() - start) * 1_000_000.0
         features = tuple(float(value) for value in features_array)
         return AdaptiveStepResult(
             prediction=None,
             features=features,
-            channels=AdaptiveChannels(),
+            channels=AdaptiveChannels(saturation=diagnostics.saturation_rate),
             metrics=StepMetrics(
                 samples_seen=state.samples_seen,
                 prediction_available=False,
                 target_available=target is not None,
+                state_norm=diagnostics.state_norm,
+                state_delta=diagnostics.state_delta,
+                feature_norm=diagnostics.feature_norm,
+                saturation_rate=diagnostics.saturation_rate,
+                trace_norms=diagnostics.trace_norms,
                 us_per_sample=elapsed_us,
             ),
             state=state,
@@ -69,5 +82,5 @@ class AdaptiveReservoir:
         return {
             "samples_seen": self.samples_seen,
             "config": self.config,
-            "api_stage": "feature_modes_v1",
+            "api_stage": "state_diagnostics_v1",
         }
