@@ -7,6 +7,11 @@ from adaptive_reservoir.core.config import (
     ReservoirConfig,
     TraceConfig,
 )
+from adaptive_reservoir.core.diagnostics import (
+    StateDiagnostics,
+    TraceNorms,
+    calculate_state_diagnostics,
+)
 from adaptive_reservoir.core.protocols import (
     ChannelCalculatorProtocol,
     FeatureExtractorProtocol,
@@ -32,9 +37,12 @@ __all__ = [
     "ReservoirConfig",
     "ReservoirCore",
     "ReservoirState",
+    "StateDiagnostics",
     "StepMetrics",
     "TopologyBuilderProtocol",
     "TraceConfig",
+    "TraceNorms",
     "__version__",
+    "calculate_state_diagnostics",
     "extract_features",
 ]
