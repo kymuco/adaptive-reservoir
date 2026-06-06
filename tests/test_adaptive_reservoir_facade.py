@@ -46,6 +46,30 @@ def test_adaptive_reservoir_step_uses_configured_feature_mode(
     assert len(result.features) == expected_length
 
 
+def test_adaptive_reservoir_step_populates_state_diagnostics() -> None:
+    model = AdaptiveReservoir(_config(feature_mode="state_raw"))
+
+    result = model.step([0.5, -0.25])
+
+    assert result.state is not None
+    assert result.metrics.state_norm is not None
+    assert result.metrics.state_delta is not None
+    assert result.metrics.feature_norm is not None
+    assert result.metrics.saturation_rate is not None
+    assert result.metrics.trace_norms is not None
+    np.testing.assert_allclose(result.metrics.state_norm, np.linalg.norm(result.state.activations))
+    np.testing.assert_allclose(result.metrics.feature_norm, np.linalg.norm(result.features))
+
+
+def test_adaptive_reservoir_saturation_channel_uses_saturation_rate() -> None:
+    model = AdaptiveReservoir(_config())
+
+    result = model.step([100.0, -100.0])
+
+    assert result.metrics.saturation_rate is not None
+    assert result.channels.saturation == result.metrics.saturation_rate
+
+
 def test_adaptive_reservoir_step_increments_samples_seen() -> None:
     model = AdaptiveReservoir(_config())
 
@@ -89,7 +113,7 @@ def test_adaptive_reservoir_reset_reinitializes_core_state() -> None:
     assert result.metrics.samples_seen == 1
 
 
-def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr33() -> None:
+def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr34() -> None:
     model = AdaptiveReservoir(_config())
     model.step([0.5, -0.25])
 
@@ -97,7 +121,7 @@ def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr33() -> None:
 
     assert snapshot["samples_seen"] == 1
     assert snapshot["config"] == model.config
-    assert snapshot["api_stage"] == "feature_modes_v1"
+    assert snapshot["api_stage"] == "state_diagnostics_v1"
 
 
 def _config(*, feature_mode: str = "state_slow_raw") -> ReservoirConfig:
