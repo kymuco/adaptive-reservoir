@@ -82,5 +82,5 @@ class AdaptiveReservoir:
         return {
             "samples_seen": self.samples_seen,
             "config": self.config,
-            "api_stage": "state_diagnostics_v1",
+            "api_stage": "feature_modes_v1",
         }
