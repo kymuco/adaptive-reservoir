@@ -89,15 +89,19 @@ def test_adaptive_reservoir_reset_reinitializes_core_state() -> None:
     assert result.metrics.samples_seen == 1
 
 
-def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr33() -> None:
+def test_adaptive_reservoir_snapshot_contains_math_state_only() -> None:
     model = AdaptiveReservoir(_config())
     model.step([0.5, -0.25])
 
     snapshot = model.snapshot()
 
-    assert snapshot["samples_seen"] == 1
-    assert snapshot["config"] == model.config
-    assert snapshot["api_stage"] == "feature_modes_v1"
+    assert snapshot["schema_version"] == 1
+    assert snapshot["api_stage"] == "snapshot_restore_v1"
+    assert snapshot["readout_state"] is None
+    assert snapshot["metrics_buffers"] == {}
+    assert "config" not in snapshot
+    assert isinstance(snapshot["state"], dict)
+    assert snapshot["state"]["samples_seen"] == 1
 
 
 def _config(*, feature_mode: str = "state_slow_raw") -> ReservoirConfig:
