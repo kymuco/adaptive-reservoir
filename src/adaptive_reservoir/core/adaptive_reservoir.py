@@ -4,11 +4,18 @@ from __future__ import annotations
 
 import math
 import time
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir.core.snapshot import (
+    SNAPSHOT_API_STAGE,
+    SNAPSHOT_SCHEMA_VERSION,
+    restore_state,
+    snapshot_state,
+    validate_runtime_snapshot,
+)
 from adaptive_reservoir.diagnostics import calculate_state_diagnostics, rms_norm
 from adaptive_reservoir.features import extract_features
 
@@ -16,7 +23,7 @@ from adaptive_reservoir.features import extract_features
 class AdaptiveReservoir:
     """High-level facade for the adaptive-reservoir public API.
 
-    PR3.4 adds state diagnostics and wires the saturation channel. Readouts,
+    PR3.5 adds reset/snapshot/restore for mathematical runtime state. Readouts,
     windowed channel calculations, and recurrent plasticity are added by later
     milestones.
     """
@@ -68,11 +75,7 @@ class AdaptiveReservoir:
         )
 
     def reset(self) -> None:
-        """Reset runtime counters and reservoir state.
-
-        Later milestones will also reset traces, readout state, and channel buffers
-        when those components become active.
-        """
+        """Reset mathematical runtime state to deterministic zero-state."""
 
         self._core = ReservoirCore.from_config(self.config)
 
@@ -80,7 +83,19 @@ class AdaptiveReservoir:
         """Return a serializable snapshot of the current mathematical state."""
 
         return {
-            "samples_seen": self.samples_seen,
-            "config": self.config,
-            "api_stage": "feature_modes_v1",
+            "schema_version": SNAPSHOT_SCHEMA_VERSION,
+            "api_stage": SNAPSHOT_API_STAGE,
+            "state": snapshot_state(self._core.state),
+            "readout_state": None,
+            "metrics_buffers": {},
         }
+
+    def restore(self, snapshot: Mapping[str, object]) -> None:
+        """Restore mathematical runtime state from a compatible snapshot."""
+
+        runtime_snapshot = validate_runtime_snapshot(snapshot)
+        self._core.state = restore_state(
+            runtime_snapshot["state"],
+            expected_n_cells=self.config.n_cells,
+            dtype=self.config.dtype,
+        )
