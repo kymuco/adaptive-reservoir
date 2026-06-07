@@ -42,11 +42,17 @@ def restore_state(
         raise ValueError(msg)
     n_cells = _required_int(snapshot, "n_cells")
     if n_cells != expected_n_cells:
-        msg = f"snapshot n_cells must match config.n_cells={expected_n_cells}; got {n_cells}"
+        msg = (
+            "snapshot n_cells must match "
+            f"config.n_cells={expected_n_cells}; got {n_cells}"
+        )
         raise ValueError(msg)
     snapshot_dtype = _required_str(snapshot, "dtype")
     if snapshot_dtype != dtype:
-        msg = f"snapshot dtype must match config.dtype={dtype!r}; got {snapshot_dtype!r}"
+        msg = (
+            "snapshot dtype must match "
+            f"config.dtype={dtype!r}; got {snapshot_dtype!r}"
+        )
         raise ValueError(msg)
     samples_seen = _required_int(snapshot, "samples_seen")
     if samples_seen < 0:
@@ -123,7 +129,10 @@ def _array_from_snapshot(
     if isinstance(values, (str, bytes)) or not isinstance(values, Sequence):
         msg = f"snapshot state.{name} must be a sequence"
         raise ValueError(msg)
-    array = np.asarray(tuple(_finite_float(value, name=name) for value in values), dtype=dtype)
+    array = np.asarray(
+        tuple(_finite_float(value, name=name) for value in values),
+        dtype=dtype,
+    )
     if array.shape != (n_cells,):
         msg = f"snapshot state.{name} must have length {n_cells}; got {array.size}"
         raise ValueError(msg)
