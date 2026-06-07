@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from adaptive_reservoir.core.state import ReservoirState
-from adaptive_reservoir.diagnostics import TraceNorms
+
+if TYPE_CHECKING:
+    from adaptive_reservoir.diagnostics import TraceNorms
 
 
 @dataclass(frozen=True, slots=True)
