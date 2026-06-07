@@ -225,10 +225,11 @@ def test_reset_after_restore_returns_to_zero_state() -> None:
 
     assert result.state is not None
     assert result.metrics.samples_seen == 1
-    np.testing.assert_array_equal(result.state.activations, np.zeros(model.config.n_cells))
-    np.testing.assert_array_equal(result.state.fast_trace, np.zeros(model.config.n_cells))
-    np.testing.assert_array_equal(result.state.mid_trace, np.zeros(model.config.n_cells))
-    np.testing.assert_array_equal(result.state.slow_trace, np.zeros(model.config.n_cells))
+    expected = np.zeros(model.config.n_cells)
+    np.testing.assert_array_equal(result.state.activations, expected)
+    np.testing.assert_array_equal(result.state.fast_trace, expected)
+    np.testing.assert_array_equal(result.state.mid_trace, expected)
+    np.testing.assert_array_equal(result.state.slow_trace, expected)
 
 
 def _config(*, dtype: str = "float64") -> ReservoirConfig:
