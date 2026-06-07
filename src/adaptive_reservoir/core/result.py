@@ -4,8 +4,12 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from adaptive_reservoir.core.state import ReservoirState
+
+if TYPE_CHECKING:
+    from adaptive_reservoir.diagnostics import TraceNorms
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,7 +44,10 @@ class StepMetrics:
     target_available: bool = False
     readout_updated: bool = False
     state_norm: float | None = None
+    state_delta: float | None = None
     feature_norm: float | None = None
+    saturation_rate: float | None = None
+    trace_norms: TraceNorms | None = None
     prediction_error: float | None = None
     us_per_sample: float | None = None
 
@@ -49,7 +56,9 @@ class StepMetrics:
             msg = "samples_seen must be non-negative"
             raise ValueError(msg)
         _validate_optional_non_negative("state_norm", self.state_norm)
+        _validate_optional_non_negative("state_delta", self.state_delta)
         _validate_optional_non_negative("feature_norm", self.feature_norm)
+        _validate_optional_channel("saturation_rate", self.saturation_rate)
         _validate_optional_non_negative("prediction_error", self.prediction_error)
         _validate_optional_non_negative("us_per_sample", self.us_per_sample)
 
@@ -77,6 +86,12 @@ def _validate_channel(name: str, value: float) -> None:
     if not math.isfinite(value) or value < 0.0 or value > 1.0:
         msg = f"{name} must be in the range [0.0, 1.0]"
         raise ValueError(msg)
+
+
+def _validate_optional_channel(name: str, value: float | None) -> None:
+    if value is None:
+        return
+    _validate_channel(name, value)
 
 
 def _validate_optional_non_negative(name: str, value: float | None) -> None:
