@@ -15,6 +15,13 @@ from adaptive_reservoir.core.protocols import (
 )
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir.core.snapshot import (
+    SNAPSHOT_API_STAGE,
+    SNAPSHOT_SCHEMA_VERSION,
+    restore_state,
+    snapshot_state,
+    validate_runtime_snapshot,
+)
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.diagnostics import (
     StateDiagnostics,
@@ -38,6 +45,8 @@ __all__ = [
     "ReservoirConfig",
     "ReservoirCore",
     "ReservoirState",
+    "SNAPSHOT_API_STAGE",
+    "SNAPSHOT_SCHEMA_VERSION",
     "StateDiagnostics",
     "StepMetrics",
     "TopologyBuilderProtocol",
@@ -46,5 +55,8 @@ __all__ = [
     "__version__",
     "calculate_state_diagnostics",
     "extract_features",
+    "restore_state",
     "rms_norm",
+    "snapshot_state",
+    "validate_runtime_snapshot",
 ]
