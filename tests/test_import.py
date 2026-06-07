@@ -64,14 +64,21 @@ def test_public_api_feature_norm_tracks_selected_feature_mode() -> None:
     assert result.state is not None
     expected_features = extract_features(result.state, "state_raw")
     assert result.features == tuple(float(value) for value in expected_features)
-    assert result.metrics.feature_norm == pytest.approx(
-        float((sum(value * value for value in result.features) / len(result.features)) ** 0.5)
+    expected_feature_norm = float(
+        (sum(value * value for value in result.features) / len(result.features)) ** 0.5
     )
+    assert result.metrics.feature_norm == pytest.approx(expected_feature_norm)
 
 
 def test_public_api_saturation_channel_uses_saturation_rate() -> None:
     model = AdaptiveReservoir(
-        ReservoirConfig(input_dim=1, n_cells=4, input_scale=100.0, leak_rate=1.0, seed=1)
+        ReservoirConfig(
+            input_dim=1,
+            n_cells=4,
+            input_scale=100.0,
+            leak_rate=1.0,
+            seed=1,
+        )
     )
 
     result = model.step([1.0])
