@@ -9,8 +9,8 @@ from adaptive_reservoir import (
     calculate_state_diagnostics,
     rms_norm,
 )
-from adaptive_reservoir.diagnostics.state import saturation_rate
 from adaptive_reservoir.core.state import ReservoirState
+from adaptive_reservoir.diagnostics.state import saturation_rate
 
 
 def test_rms_norm_uses_root_mean_square() -> None:
@@ -29,8 +29,10 @@ def test_state_diagnostics_calculates_state_norm_and_delta() -> None:
         saturation_threshold=0.95,
     )
 
-    assert diagnostics.state_norm == pytest.approx(math.sqrt((1.0 + 0.25 + 1.0) / 3.0))
-    assert diagnostics.state_delta == pytest.approx(math.sqrt((1.0 + 0.0 + 0.25) / 3.0))
+    expected_state_norm = math.sqrt((1.0 + 0.25 + 1.0) / 3.0)
+    expected_state_delta = math.sqrt((1.0 + 0.0 + 0.25) / 3.0)
+    assert diagnostics.state_norm == pytest.approx(expected_state_norm)
+    assert diagnostics.state_delta == pytest.approx(expected_state_delta)
 
 
 def test_saturation_rate_counts_abs_values_reaching_threshold() -> None:
