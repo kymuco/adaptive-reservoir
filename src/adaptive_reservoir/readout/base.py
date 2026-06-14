@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import Protocol, runtime_checkable
 
 import numpy as np
@@ -54,7 +55,8 @@ class ReadoutSnapshot:
     def __post_init__(self) -> None:
         _validate_schema_version(self.schema_version)
         _validate_name(self.name)
-        validate_snapshot_mapping(self.state)
+        state = validate_snapshot_mapping(self.state)
+        object.__setattr__(self, "state", MappingProxyType(dict(state)))
 
 
 def validate_features(

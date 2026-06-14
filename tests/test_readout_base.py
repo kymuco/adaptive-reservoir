@@ -43,6 +43,21 @@ def test_readout_snapshot_is_immutable() -> None:
 
     with pytest.raises(FrozenInstanceError):
         snapshot.name = "other"  # type: ignore[misc]
+    with pytest.raises(TypeError):
+        snapshot.state["bias"] = 1.0  # type: ignore[index]
+
+
+def test_readout_snapshot_copies_state_mapping() -> None:
+    state = {"bias": 0.0}
+    snapshot = ReadoutSnapshot(
+        schema_version=READOUT_SNAPSHOT_SCHEMA_VERSION,
+        name="dummy",
+        state=state,
+    )
+
+    state["bias"] = 1.0
+
+    assert snapshot.state["bias"] == 0.0
 
 
 def test_readout_snapshot_validates_schema_version() -> None:
