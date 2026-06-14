@@ -33,7 +33,7 @@ class NLMSReadout:
         self.feature_dim = _validate_feature_dim(feature_dim)
         self.learning_rate = _validate_positive_finite("learning_rate", learning_rate)
         self.epsilon = _validate_positive_finite("epsilon", epsilon)
-        self.dtype = np.dtype(dtype).name
+        self.dtype = _validate_floating_dtype(dtype)
         self._weights = np.zeros(self.feature_dim, dtype=self.dtype)
         self._weights.setflags(write=False)
         self._bias = 0.0
@@ -168,6 +168,14 @@ def _validate_positive_finite(name: str, value: float) -> float:
         msg = f"{name} must be finite and positive"
         raise ValueError(msg)
     return result
+
+
+def _validate_floating_dtype(value: str) -> str:
+    dtype = np.dtype(value)
+    if not np.issubdtype(dtype, np.floating):
+        msg = "dtype must be a floating dtype"
+        raise ValueError(msg)
+    return dtype.name
 
 
 def _required_int(state: Mapping[str, object], key: str) -> int:
