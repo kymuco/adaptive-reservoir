@@ -388,7 +388,10 @@ def test_sliding_ridge_restore_rejects_non_finite_window_values() -> None:
             targets_window=(float("inf"),),
         ),
     )
-    with pytest.raises(ValueError, match="snapshot state.targets_window values must be finite"):
+    with pytest.raises(
+        ValueError,
+        match="snapshot state.targets_window values must be finite",
+    ):
         readout.restore(bad_targets)
 
 
