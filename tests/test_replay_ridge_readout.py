@@ -267,7 +267,10 @@ def test_replay_ridge_restore_rejects_bad_weights_shape() -> None:
 def test_replay_ridge_restore_rejects_bad_buffer_shape() -> None:
     readout = ReplayRidgeReadout(feature_dim=2, buffer_size=2)
     snapshot = readout.snapshot()
-    bad_snapshot = replace(snapshot, state={**snapshot.state, "features_buffer": ((1.0,),), "targets_buffer": (1.0,)})
+    bad_snapshot = replace(
+        snapshot,
+        state={**snapshot.state, "features_buffer": ((1.0,),), "targets_buffer": (1.0,)},
+    )
 
     with pytest.raises(ValueError, match="expected feature_dim=2, got 1"):
         readout.restore(bad_snapshot)
@@ -276,7 +279,10 @@ def test_replay_ridge_restore_rejects_bad_buffer_shape() -> None:
 def test_replay_ridge_restore_rejects_mismatched_buffer_lengths() -> None:
     readout = ReplayRidgeReadout(feature_dim=2)
     snapshot = readout.snapshot()
-    bad_snapshot = replace(snapshot, state={**snapshot.state, "features_buffer": ((1.0, 0.0),), "targets_buffer": ()})
+    bad_snapshot = replace(
+        snapshot,
+        state={**snapshot.state, "features_buffer": ((1.0, 0.0),), "targets_buffer": ()},
+    )
 
     with pytest.raises(ValueError, match="snapshot state.targets_buffer length must match features_buffer length"):
         readout.restore(bad_snapshot)
@@ -285,7 +291,14 @@ def test_replay_ridge_restore_rejects_mismatched_buffer_lengths() -> None:
 def test_replay_ridge_restore_rejects_oversized_buffer() -> None:
     readout = ReplayRidgeReadout(feature_dim=1, buffer_size=1)
     snapshot = readout.snapshot()
-    bad_snapshot = replace(snapshot, state={**snapshot.state, "features_buffer": ((1.0,), (2.0,)), "targets_buffer": (1.0, 2.0)})
+    bad_snapshot = replace(
+        snapshot,
+        state={
+            **snapshot.state,
+            "features_buffer": ((1.0,), (2.0,)),
+            "targets_buffer": (1.0, 2.0),
+        },
+    )
 
     with pytest.raises(ValueError, match="snapshot state.features_buffer must not exceed buffer_size"):
         readout.restore(bad_snapshot)
@@ -294,11 +307,17 @@ def test_replay_ridge_restore_rejects_oversized_buffer() -> None:
 def test_replay_ridge_restore_rejects_non_finite_buffer_values() -> None:
     readout = ReplayRidgeReadout(feature_dim=1)
     snapshot = readout.snapshot()
-    bad_features = replace(snapshot, state={**snapshot.state, "features_buffer": ((float("nan"),),), "targets_buffer": (1.0,)})
+    bad_features = replace(
+        snapshot,
+        state={**snapshot.state, "features_buffer": ((float("nan"),),), "targets_buffer": (1.0,)},
+    )
     with pytest.raises(ValueError, match="features must contain only finite values"):
         readout.restore(bad_features)
 
-    bad_targets = replace(snapshot, state={**snapshot.state, "features_buffer": ((1.0,),), "targets_buffer": (float("inf"),)})
+    bad_targets = replace(
+        snapshot,
+        state={**snapshot.state, "features_buffer": ((1.0,),), "targets_buffer": (float("inf"),)},
+    )
     with pytest.raises(ValueError, match="snapshot state.targets_buffer values must be finite"):
         readout.restore(bad_targets)
 
@@ -308,7 +327,12 @@ def test_replay_ridge_restore_rejects_samples_seen_less_than_buffer_length() -> 
     snapshot = readout.snapshot()
     bad_snapshot = replace(
         snapshot,
-        state={**snapshot.state, "samples_seen": 0, "features_buffer": ((1.0,),), "targets_buffer": (1.0,)},
+        state={
+            **snapshot.state,
+            "samples_seen": 0,
+            "features_buffer": ((1.0,),),
+            "targets_buffer": (1.0,),
+        },
     )
 
     with pytest.raises(ValueError, match="snapshot samples_seen must be at least the replay buffer length"):
