@@ -7,15 +7,17 @@ from dataclasses import dataclass
 import numpy as np
 
 from adaptive_reservoir.core.state import ReservoirState
+from adaptive_reservoir.readout.base import ReadoutSnapshot
 
-SNAPSHOT_SCHEMA_VERSION = 1
+SNAPSHOT_SCHEMA_VERSION = 2
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReservoirSnapshot:
-    """Immutable numeric checkpoint for reservoir runtime state."""
+    """Immutable numeric checkpoint for reservoir and readout runtime state."""
 
     state: ReservoirState
+    readout: ReadoutSnapshot
     schema_version: int = SNAPSHOT_SCHEMA_VERSION
 
 
