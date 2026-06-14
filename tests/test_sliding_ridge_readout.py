@@ -8,6 +8,10 @@ import pytest
 from adaptive_reservoir.readout import ReadoutSnapshot, SlidingWindowRidgeReadout
 
 
+def _state(snapshot: ReadoutSnapshot, **updates: object) -> dict[str, object]:
+    return {**snapshot.state, **updates}
+
+
 def test_sliding_ridge_predict_starts_from_zero() -> None:
     readout = SlidingWindowRidgeReadout(feature_dim=2)
 
@@ -94,11 +98,12 @@ def test_sliding_ridge_forgets_old_samples() -> None:
     for features, target in [([0.0], 0.0), ([1.0], -1.0), ([2.0], -2.0)]:
         readout.update(features, target)
     new_prediction = readout.predict([3.0])
+    snapshot = readout.snapshot()
 
     assert old_prediction > 0.0
     assert new_prediction == pytest.approx(-3.0, abs=1e-2)
-    assert readout.snapshot().state["features_window"] == ((0.0,), (1.0,), (2.0,))
-    assert readout.snapshot().state["targets_window"] == (0.0, -1.0, -2.0)
+    assert snapshot.state["features_window"] == ((0.0,), (1.0,), (2.0,))
+    assert snapshot.state["targets_window"] == (0.0, -1.0, -2.0)
 
 
 def test_sliding_ridge_rejects_invalid_constructor_values() -> None:
@@ -285,19 +290,19 @@ def test_sliding_ridge_restore_rejects_incompatible_config() -> None:
     )
     snapshot = readout.snapshot()
 
-    bad_window = replace(snapshot, state={**snapshot.state, "window_size": 3})
+    bad_window = replace(snapshot, state=_state(snapshot, window_size=3))
     with pytest.raises(ValueError, match="snapshot window_size must match 2; got 3"):
         readout.restore(bad_window)
 
-    bad_interval = replace(snapshot, state={**snapshot.state, "update_interval": 2})
+    bad_interval = replace(snapshot, state=_state(snapshot, update_interval=2))
     with pytest.raises(ValueError, match="snapshot update_interval must match 1; got 2"):
         readout.restore(bad_interval)
 
-    bad_alpha = replace(snapshot, state={**snapshot.state, "alpha": 1e-2})
+    bad_alpha = replace(snapshot, state=_state(snapshot, alpha=1e-2))
     with pytest.raises(ValueError, match="snapshot alpha must match current readout"):
         readout.restore(bad_alpha)
 
-    bad_dtype = replace(snapshot, state={**snapshot.state, "dtype": "float32"})
+    bad_dtype = replace(snapshot, state=_state(snapshot, dtype="float32"))
     with pytest.raises(ValueError, match="snapshot dtype must match 'float64'"):
         readout.restore(bad_dtype)
 
@@ -305,7 +310,7 @@ def test_sliding_ridge_restore_rejects_incompatible_config() -> None:
 def test_sliding_ridge_restore_rejects_bad_weights_shape() -> None:
     readout = SlidingWindowRidgeReadout(feature_dim=2)
     snapshot = readout.snapshot()
-    bad_snapshot = replace(snapshot, state={**snapshot.state, "weights": (0.0,)})
+    bad_snapshot = replace(snapshot, state=_state(snapshot, weights=(0.0,)))
 
     with pytest.raises(ValueError, match="expected feature_dim=2, got 1"):
         readout.restore(bad_snapshot)
@@ -316,7 +321,11 @@ def test_sliding_ridge_restore_rejects_bad_window_shape() -> None:
     snapshot = readout.snapshot()
     bad_snapshot = replace(
         snapshot,
-        state={**snapshot.state, "features_window": ((1.0,),), "targets_window": (1.0,)},
+        state=_state(
+            snapshot,
+            features_window=((1.0,),),
+            targets_window=(1.0,),
+        ),
     )
 
     with pytest.raises(ValueError, match="expected feature_dim=2, got 1"):
@@ -328,7 +337,7 @@ def test_sliding_ridge_restore_rejects_mismatched_window_lengths() -> None:
     snapshot = readout.snapshot()
     bad_snapshot = replace(
         snapshot,
-        state={**snapshot.state, "features_window": ((1.0, 0.0),), "targets_window": ()},
+        state=_state(snapshot, features_window=((1.0, 0.0),), targets_window=()),
     )
 
     with pytest.raises(
@@ -343,11 +352,11 @@ def test_sliding_ridge_restore_rejects_oversized_window() -> None:
     snapshot = readout.snapshot()
     bad_snapshot = replace(
         snapshot,
-        state={
-            **snapshot.state,
-            "features_window": ((1.0,), (2.0,)),
-            "targets_window": (1.0, 2.0),
-        },
+        state=_state(
+            snapshot,
+            features_window=((1.0,), (2.0,)),
+            targets_window=(1.0, 2.0),
+        ),
     )
 
     with pytest.raises(
@@ -362,14 +371,22 @@ def test_sliding_ridge_restore_rejects_non_finite_window_values() -> None:
     snapshot = readout.snapshot()
     bad_features = replace(
         snapshot,
-        state={**snapshot.state, "features_window": ((float("nan"),),), "targets_window": (1.0,)},
+        state=_state(
+            snapshot,
+            features_window=((float("nan"),),),
+            targets_window=(1.0,),
+        ),
     )
     with pytest.raises(ValueError, match="features must contain only finite values"):
         readout.restore(bad_features)
 
     bad_targets = replace(
         snapshot,
-        state={**snapshot.state, "features_window": ((1.0,),), "targets_window": (float("inf"),)},
+        state=_state(
+            snapshot,
+            features_window=((1.0,),),
+            targets_window=(float("inf"),),
+        ),
     )
     with pytest.raises(ValueError, match="snapshot state.targets_window values must be finite"):
         readout.restore(bad_targets)
@@ -380,12 +397,12 @@ def test_sliding_ridge_restore_rejects_samples_seen_less_than_window_length() ->
     snapshot = readout.snapshot()
     bad_snapshot = replace(
         snapshot,
-        state={
-            **snapshot.state,
-            "samples_seen": 0,
-            "features_window": ((1.0,),),
-            "targets_window": (1.0,),
-        },
+        state=_state(
+            snapshot,
+            samples_seen=0,
+            features_window=((1.0,),),
+            targets_window=(1.0,),
+        ),
     )
 
     with pytest.raises(
