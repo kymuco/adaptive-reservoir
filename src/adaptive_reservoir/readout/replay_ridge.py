@@ -17,6 +17,7 @@ from adaptive_reservoir.readout.base import (
 )
 
 REPLAY_RIDGE_READOUT_NAME = "replay_ridge"
+_SUPPORTED_LINALG_DTYPE_NAMES = frozenset({"float32", "float64"})
 
 
 class ReplayRidgeReadout:
@@ -235,6 +236,9 @@ def _validate_floating_dtype(value: str) -> str:
         raise ValueError(msg) from exc
     if not np.issubdtype(dtype, np.floating):
         msg = "dtype must be a floating dtype"
+        raise ValueError(msg)
+    if dtype.name not in _SUPPORTED_LINALG_DTYPE_NAMES:
+        msg = "dtype must be one of: float32, float64"
         raise ValueError(msg)
     return dtype.name
 
