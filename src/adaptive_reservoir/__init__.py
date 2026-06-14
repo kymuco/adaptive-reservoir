@@ -10,7 +10,6 @@ from adaptive_reservoir.core.config import (
 from adaptive_reservoir.core.protocols import (
     ChannelCalculatorProtocol,
     FeatureExtractorProtocol,
-    ReadoutProtocol,
     TopologyBuilderProtocol,
 )
 from adaptive_reservoir.core.reservoir import ReservoirCore
@@ -24,6 +23,7 @@ from adaptive_reservoir.diagnostics import (
     rms_norm,
 )
 from adaptive_reservoir.features import extract_features
+from adaptive_reservoir.readout import ReadoutProtocol, ReadoutSnapshot
 
 __version__ = "0.0.0"
 
@@ -36,6 +36,7 @@ __all__ = [
     "FeatureExtractorProtocol",
     "ReadoutConfig",
     "ReadoutProtocol",
+    "ReadoutSnapshot",
     "ReservoirConfig",
     "ReservoirCore",
     "ReservoirSnapshot",
