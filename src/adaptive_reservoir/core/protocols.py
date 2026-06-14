@@ -17,6 +17,14 @@ if TYPE_CHECKING:
 
 FloatArray = NDArray[np.floating]
 
+__all__ = [
+    "ChannelCalculatorProtocol",
+    "FeatureExtractorProtocol",
+    "FloatArray",
+    "ReadoutProtocol",
+    "TopologyBuilderProtocol",
+]
+
 
 @runtime_checkable
 class TopologyBuilderProtocol(Protocol):
