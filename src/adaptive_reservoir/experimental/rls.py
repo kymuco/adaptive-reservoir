@@ -18,6 +18,7 @@ from adaptive_reservoir.readout.base import (
 
 RLS_READOUT_NAME = "experimental_rls"
 _SUPPORTED_DTYPE_NAME = "float64"
+_COVARIANCE_EIGENVALUE_TOLERANCE = 1e-10
 
 
 class RLSReadout:
@@ -300,6 +301,7 @@ def _validate_covariance(
         raise ValueError(msg) from exc
     _validate_matrix("covariance", matrix, expected_dim=expected_dim)
     matrix = 0.5 * (matrix + matrix.T)
+    _validate_positive_semidefinite_covariance(matrix)
     return np.asarray(matrix, dtype=dtype)
 
 
@@ -321,4 +323,11 @@ def _validate_matrix(name: str, value: object, *, expected_dim: int) -> None:
         raise ValueError(msg)
     if not np.all(np.isfinite(matrix)):
         msg = f"{name} must contain only finite values"
+        raise ValueError(msg)
+
+
+def _validate_positive_semidefinite_covariance(matrix: FloatArray) -> None:
+    eigenvalues = np.linalg.eigvalsh(matrix)
+    if np.min(eigenvalues) < -_COVARIANCE_EIGENVALUE_TOLERANCE:
+        msg = "covariance must be positive semidefinite"
         raise ValueError(msg)
