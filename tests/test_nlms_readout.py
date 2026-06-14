@@ -57,6 +57,11 @@ def test_nlms_rejects_invalid_constructor_values() -> None:
         NLMSReadout(feature_dim=1, epsilon=float("nan"))
 
 
+def test_nlms_rejects_non_floating_dtype() -> None:
+    with pytest.raises(ValueError, match="dtype must be a floating dtype"):
+        NLMSReadout(feature_dim=1, dtype="int64")
+
+
 def test_nlms_rejects_wrong_feature_dim() -> None:
     readout = NLMSReadout(feature_dim=2)
 
@@ -116,6 +121,14 @@ def test_nlms_snapshot_contains_numeric_state_only() -> None:
     assert "target_history" not in snapshot.state
     assert "messages" not in snapshot.state
     assert "policy_decision" not in snapshot.state
+
+
+def test_nlms_snapshot_state_is_read_only() -> None:
+    readout = NLMSReadout(feature_dim=2)
+    snapshot = readout.snapshot()
+
+    with pytest.raises(TypeError):
+        snapshot.state["bias"] = 1.0  # type: ignore[index]
 
 
 def test_nlms_snapshot_is_independent_from_future_updates() -> None:
