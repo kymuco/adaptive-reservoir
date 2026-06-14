@@ -4,6 +4,7 @@ import adaptive_reservoir
 from adaptive_reservoir import (
     AdaptiveReservoir,
     ReservoirConfig,
+    ReservoirSnapshot,
     ReservoirState,
     StateDiagnostics,
     TraceNorms,
@@ -45,6 +46,7 @@ def test_public_api_processes_one_reservoir_step() -> None:
     assert isinstance(result.metrics.trace_norms, TraceNorms)
     assert isinstance(result.state, ReservoirState)
     assert model.samples_seen == 1
+    assert isinstance(model.snapshot(), ReservoirSnapshot)
 
 
 def test_public_api_validates_input_dim() -> None:

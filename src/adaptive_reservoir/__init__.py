@@ -15,6 +15,7 @@ from adaptive_reservoir.core.protocols import (
 )
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir.core.snapshot import ReservoirSnapshot
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.diagnostics import (
     StateDiagnostics,
@@ -37,6 +38,7 @@ __all__ = [
     "ReadoutProtocol",
     "ReservoirConfig",
     "ReservoirCore",
+    "ReservoirSnapshot",
     "ReservoirState",
     "StateDiagnostics",
     "StepMetrics",

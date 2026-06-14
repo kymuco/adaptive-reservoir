@@ -1,7 +1,13 @@
 import numpy as np
 import pytest
 
-from adaptive_reservoir import AdaptiveChannels, AdaptiveReservoir, ReservoirConfig, ReservoirState
+from adaptive_reservoir import (
+    AdaptiveChannels,
+    AdaptiveReservoir,
+    ReservoirConfig,
+    ReservoirSnapshot,
+    ReservoirState,
+)
 
 
 def test_adaptive_reservoir_step_returns_stateful_result() -> None:
@@ -89,15 +95,17 @@ def test_adaptive_reservoir_reset_reinitializes_core_state() -> None:
     assert result.metrics.samples_seen == 1
 
 
-def test_adaptive_reservoir_snapshot_remains_lightweight_in_pr33() -> None:
+def test_adaptive_reservoir_snapshot_returns_numeric_state_only() -> None:
     model = AdaptiveReservoir(_config())
     model.step([0.5, -0.25])
 
     snapshot = model.snapshot()
 
-    assert snapshot["samples_seen"] == 1
-    assert snapshot["config"] == model.config
-    assert snapshot["api_stage"] == "feature_modes_v1"
+    assert isinstance(snapshot, ReservoirSnapshot)
+    assert snapshot.schema_version == 1
+    assert isinstance(snapshot.state, ReservoirState)
+    assert snapshot.state.samples_seen == 1
+    assert snapshot.state.activations.shape == (4,)
 
 
 def _config(*, feature_mode: str = "state_slow_raw") -> ReservoirConfig:
