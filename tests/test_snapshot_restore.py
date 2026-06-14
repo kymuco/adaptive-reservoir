@@ -114,56 +114,60 @@ def test_restore_rejects_wrong_snapshot_type() -> None:
         model.restore({"schema_version": 2, "state": None})  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize(
-    ("snapshot", "message"),
-    [
-        (
-            ReservoirSnapshot(
-                state=ReservoirState(
-                    activations=np.zeros(3, dtype=np.float64),
-                    fast_trace=np.zeros(3, dtype=np.float64),
-                    mid_trace=np.zeros(3, dtype=np.float64),
-                    slow_trace=np.zeros(3, dtype=np.float64),
-                ),
-                readout=_readout_snapshot(),
-            ),
-            "shape",
-        ),
-        (
-            ReservoirSnapshot(
-                state=ReservoirState(
-                    activations=np.zeros(4, dtype=np.float32),
-                    fast_trace=np.zeros(4, dtype=np.float32),
-                    mid_trace=np.zeros(4, dtype=np.float32),
-                    slow_trace=np.zeros(4, dtype=np.float32),
-                ),
-                readout=_readout_snapshot(),
-            ),
-            "dtype",
-        ),
-        (
-            ReservoirSnapshot(
-                state=ReservoirState(
-                    activations=np.zeros(4, dtype=np.float64),
-                    fast_trace=np.zeros(4, dtype=np.float64),
-                    mid_trace=np.zeros(4, dtype=np.float64),
-                    slow_trace=np.zeros(4, dtype=np.float64),
-                ),
-                readout=_readout_snapshot(),
-                schema_version=999,
-            ),
-            "schema_version",
-        ),
-        (
-            dataclasses.replace(_valid_snapshot(), readout=_bad_readout_snapshot()),
-            "snapshot name must be",
-        ),
-    ],
-)
-def test_restore_rejects_incompatible_snapshot(snapshot: ReservoirSnapshot, message: str) -> None:
+def test_restore_rejects_bad_state_shape() -> None:
     model = AdaptiveReservoir(_config())
+    snapshot = ReservoirSnapshot(
+        state=ReservoirState(
+            activations=np.zeros(3, dtype=np.float64),
+            fast_trace=np.zeros(3, dtype=np.float64),
+            mid_trace=np.zeros(3, dtype=np.float64),
+            slow_trace=np.zeros(3, dtype=np.float64),
+        ),
+        readout=_readout_snapshot(),
+    )
 
-    with pytest.raises((TypeError, ValueError), match=message):
+    with pytest.raises(ValueError, match="shape"):
+        model.restore(snapshot)
+
+
+def test_restore_rejects_bad_state_dtype() -> None:
+    model = AdaptiveReservoir(_config())
+    snapshot = ReservoirSnapshot(
+        state=ReservoirState(
+            activations=np.zeros(4, dtype=np.float32),
+            fast_trace=np.zeros(4, dtype=np.float32),
+            mid_trace=np.zeros(4, dtype=np.float32),
+            slow_trace=np.zeros(4, dtype=np.float32),
+        ),
+        readout=_readout_snapshot(),
+    )
+
+    with pytest.raises(ValueError, match="dtype"):
+        model.restore(snapshot)
+
+
+def test_restore_rejects_bad_schema_version() -> None:
+    model = AdaptiveReservoir(_config())
+    snapshot = ReservoirSnapshot(
+        state=ReservoirState(
+            activations=np.zeros(4, dtype=np.float64),
+            fast_trace=np.zeros(4, dtype=np.float64),
+            mid_trace=np.zeros(4, dtype=np.float64),
+            slow_trace=np.zeros(4, dtype=np.float64),
+        ),
+        readout=_readout_snapshot(),
+        schema_version=999,
+    )
+
+    with pytest.raises(ValueError, match="schema_version"):
+        model.restore(snapshot)
+
+
+def test_restore_rejects_bad_readout_snapshot() -> None:
+    model = AdaptiveReservoir(_config())
+    snapshot = dataclasses.replace(_valid_snapshot(), readout=_bad_readout_snapshot())
+
+    with pytest.raises(ValueError, match="snapshot name must be"):
         model.restore(snapshot)
 
 
