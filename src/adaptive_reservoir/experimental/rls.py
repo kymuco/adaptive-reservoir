@@ -298,8 +298,8 @@ def _validate_covariance(
     except (TypeError, ValueError) as exc:
         msg = "snapshot state.covariance must contain only numeric values"
         raise ValueError(msg) from exc
-    matrix = 0.5 * (matrix + matrix.T) if matrix.ndim == 2 else matrix
     _validate_matrix("covariance", matrix, expected_dim=expected_dim)
+    matrix = 0.5 * (matrix + matrix.T)
     return np.asarray(matrix, dtype=dtype)
 
 
