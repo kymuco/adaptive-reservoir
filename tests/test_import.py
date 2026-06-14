@@ -33,7 +33,7 @@ def test_public_api_processes_one_reservoir_step() -> None:
 
     result = model.step([0.1, -0.2], target=1.0)
 
-    assert result.prediction is None
+    assert result.prediction == 0.0
     assert len(result.features) == 2 * model.config.n_cells
     assert result.channels.novelty == 0.0
     assert result.channels.stability == 1.0
@@ -41,7 +41,10 @@ def test_public_api_processes_one_reservoir_step() -> None:
     assert result.channels.confidence == 0.0
     assert result.channels.saturation == result.metrics.saturation_rate
     assert result.metrics.samples_seen == 1
+    assert result.metrics.prediction_available is True
     assert result.metrics.target_available is True
+    assert result.metrics.readout_updated is True
+    assert result.metrics.prediction_error == pytest.approx(1.0)
     assert result.metrics.state_norm is not None
     assert result.metrics.state_delta is not None
     assert result.metrics.feature_norm is not None
