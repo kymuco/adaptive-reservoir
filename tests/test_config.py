@@ -107,7 +107,8 @@ def test_invalid_trace_config_raises_clear_errors(
     [
         ({"name": "bad"}, "readout.name must be one of"),
         ({"learning_rate": 0.0}, "learning_rate must be positive"),
-        ({"ridge_alpha": -0.1}, "ridge_alpha must be non-negative"),
+        ({"ridge_alpha": 0.0}, "ridge_alpha must be positive"),
+        ({"ridge_alpha": -0.1}, "ridge_alpha must be positive"),
         ({"buffer_size": 0}, "buffer_size must be positive"),
         ({"window_size": 0}, "window_size must be positive"),
         ({"update_interval": 0}, "update_interval must be positive"),
