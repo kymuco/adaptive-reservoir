@@ -5,7 +5,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from adaptive_reservoir.readout import ReplayRidgeReadout, ReadoutSnapshot
+from adaptive_reservoir.readout import ReadoutSnapshot, ReplayRidgeReadout
 
 
 def test_replay_ridge_predict_starts_from_zero() -> None:
@@ -61,7 +61,12 @@ def test_replay_ridge_buffer_respects_buffer_size() -> None:
 
 
 def test_replay_ridge_learns_simple_linear_mapping() -> None:
-    readout = ReplayRidgeReadout(feature_dim=1, buffer_size=8, refit_interval=1, alpha=1e-6)
+    readout = ReplayRidgeReadout(
+        feature_dim=1,
+        buffer_size=8,
+        refit_interval=1,
+        alpha=1e-6,
+    )
 
     for features, target in [
         ([0.0], 1.0),
@@ -131,7 +136,12 @@ def test_replay_ridge_weights_property_is_read_only_copy() -> None:
 
 
 def test_replay_ridge_snapshot_contains_numeric_state_only() -> None:
-    readout = ReplayRidgeReadout(feature_dim=2, buffer_size=3, refit_interval=2, alpha=1e-6)
+    readout = ReplayRidgeReadout(
+        feature_dim=2,
+        buffer_size=3,
+        refit_interval=2,
+        alpha=1e-6,
+    )
     readout.update([1.0, -1.0], 0.5)
 
     snapshot = readout.snapshot()
@@ -181,7 +191,12 @@ def test_replay_ridge_snapshot_is_independent_from_future_updates() -> None:
 
 
 def test_replay_ridge_restore_recovers_prediction() -> None:
-    readout = ReplayRidgeReadout(feature_dim=1, buffer_size=4, refit_interval=1, alpha=1e-6)
+    readout = ReplayRidgeReadout(
+        feature_dim=1,
+        buffer_size=4,
+        refit_interval=1,
+        alpha=1e-6,
+    )
     for features, target in [([0.0], 1.0), ([1.0], 3.0), ([2.0], 5.0)]:
         readout.update(features, target)
     snapshot = readout.snapshot()
@@ -235,7 +250,12 @@ def test_replay_ridge_restore_rejects_incompatible_feature_dim() -> None:
 
 
 def test_replay_ridge_restore_rejects_incompatible_config() -> None:
-    readout = ReplayRidgeReadout(feature_dim=2, buffer_size=2, refit_interval=1, alpha=1e-3)
+    readout = ReplayRidgeReadout(
+        feature_dim=2,
+        buffer_size=2,
+        refit_interval=1,
+        alpha=1e-3,
+    )
     snapshot = readout.snapshot()
 
     bad_buffer = replace(snapshot, state={**snapshot.state, "buffer_size": 3})
@@ -284,7 +304,10 @@ def test_replay_ridge_restore_rejects_mismatched_buffer_lengths() -> None:
         state={**snapshot.state, "features_buffer": ((1.0, 0.0),), "targets_buffer": ()},
     )
 
-    with pytest.raises(ValueError, match="snapshot state.targets_buffer length must match features_buffer length"):
+    with pytest.raises(
+        ValueError,
+        match="snapshot state.targets_buffer length must match features_buffer length",
+    ):
         readout.restore(bad_snapshot)
 
 
@@ -300,7 +323,10 @@ def test_replay_ridge_restore_rejects_oversized_buffer() -> None:
         },
     )
 
-    with pytest.raises(ValueError, match="snapshot state.features_buffer must not exceed buffer_size"):
+    with pytest.raises(
+        ValueError,
+        match="snapshot state.features_buffer must not exceed buffer_size",
+    ):
         readout.restore(bad_snapshot)
 
 
@@ -335,5 +361,8 @@ def test_replay_ridge_restore_rejects_samples_seen_less_than_buffer_length() -> 
         },
     )
 
-    with pytest.raises(ValueError, match="snapshot samples_seen must be at least the replay buffer length"):
+    with pytest.raises(
+        ValueError,
+        match="snapshot samples_seen must be at least the replay buffer length",
+    ):
         readout.restore(bad_snapshot)
