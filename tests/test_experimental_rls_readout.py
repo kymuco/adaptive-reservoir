@@ -313,7 +313,10 @@ def test_rls_restore_rejects_non_finite_covariance() -> None:
     snapshot = readout.snapshot()
     bad_snapshot = replace(
         snapshot,
-        state=_state(snapshot, covariance=((1.0, 0.0), (0.0, float("nan")))),
+        state=_state(
+            snapshot,
+            covariance=((1.0, 0.0), (0.0, float("nan"))),
+        ),
     )
 
     with pytest.raises(ValueError, match="covariance must contain only finite values"):
