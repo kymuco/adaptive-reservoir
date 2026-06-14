@@ -182,23 +182,35 @@ def test_nlms_restore_rejects_incompatible_feature_dim() -> None:
 
 def test_nlms_restore_rejects_incompatible_dtype() -> None:
     readout = NLMSReadout(feature_dim=2, dtype="float64")
-    snapshot = replace(readout.snapshot(), state={**readout.snapshot().state, "dtype": "float32"})
+    snapshot = readout.snapshot()
+    bad_snapshot = replace(
+        snapshot,
+        state={**snapshot.state, "dtype": "float32"},
+    )
 
     with pytest.raises(ValueError, match="snapshot dtype must match 'float64'"):
-        readout.restore(snapshot)
+        readout.restore(bad_snapshot)
 
 
 def test_nlms_restore_rejects_bad_weights_shape() -> None:
     readout = NLMSReadout(feature_dim=2)
-    snapshot = replace(readout.snapshot(), state={**readout.snapshot().state, "weights": (0.0,)})
+    snapshot = readout.snapshot()
+    bad_snapshot = replace(
+        snapshot,
+        state={**snapshot.state, "weights": (0.0,)},
+    )
 
     with pytest.raises(ValueError, match="expected feature_dim=2, got 1"):
-        readout.restore(snapshot)
+        readout.restore(bad_snapshot)
 
 
 def test_nlms_restore_rejects_negative_samples_seen() -> None:
     readout = NLMSReadout(feature_dim=2)
-    snapshot = replace(readout.snapshot(), state={**readout.snapshot().state, "samples_seen": -1})
+    snapshot = readout.snapshot()
+    bad_snapshot = replace(
+        snapshot,
+        state={**snapshot.state, "samples_seen": -1},
+    )
 
     with pytest.raises(ValueError, match="snapshot samples_seen must be non-negative"):
-        readout.restore(snapshot)
+        readout.restore(bad_snapshot)
