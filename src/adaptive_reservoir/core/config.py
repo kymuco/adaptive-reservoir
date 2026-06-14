@@ -53,8 +53,8 @@ class ReadoutConfig:
         if self.learning_rate <= 0.0:
             msg = "learning_rate must be positive"
             raise ValueError(msg)
-        if self.ridge_alpha < 0.0:
-            msg = "ridge_alpha must be non-negative"
+        if self.ridge_alpha <= 0.0:
+            msg = "ridge_alpha must be positive"
             raise ValueError(msg)
         _validate_positive_int("buffer_size", self.buffer_size)
         _validate_positive_int("window_size", self.window_size)

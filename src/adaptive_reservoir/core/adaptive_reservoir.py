@@ -19,19 +19,17 @@ from adaptive_reservoir.core.snapshot import (
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.diagnostics import calculate_state_diagnostics, rms_norm
 from adaptive_reservoir.features import extract_features
+from adaptive_reservoir.readout.base import ReadoutProtocol
+from adaptive_reservoir.readout.factory import create_readout
 
 
 class AdaptiveReservoir:
-    """High-level facade for the adaptive-reservoir public API.
-
-    PR3.4 adds state diagnostics and wires the saturation channel. Readouts,
-    windowed channel calculations, and recurrent plasticity are added by later
-    milestones.
-    """
+    """High-level facade for the adaptive-reservoir public API."""
 
     def __init__(self, config: ReservoirConfig) -> None:
         self.config = config
         self._core = ReservoirCore.from_config(config)
+        self._readout = self._create_readout()
 
     @property
     def samples_seen(self) -> int:
@@ -49,47 +47,58 @@ class AdaptiveReservoir:
 
         previous_state = self._core.state
         state = self._core.step(x)
-        elapsed_us = (time.perf_counter() - start) * 1_000_000.0
         features_array = extract_features(state, self.config.feature_mode)
-        features = tuple(float(value) for value in features_array)
+        prediction = self._readout.predict(features_array)
+        prediction_error = None
+        readout_updated = False
+        if target is not None:
+            prediction_error = abs(float(target) - prediction)
+            self._readout.update(features_array, target)
+            readout_updated = True
         diagnostics = calculate_state_diagnostics(
             previous=previous_state,
             current=state,
             saturation_threshold=self.config.channels.saturation_threshold,
         )
+        features = tuple(float(value) for value in features_array)
+        elapsed_us = (time.perf_counter() - start) * 1_000_000.0
         return AdaptiveStepResult(
-            prediction=None,
+            prediction=prediction,
             features=features,
             channels=AdaptiveChannels(saturation=diagnostics.saturation_rate),
             metrics=StepMetrics(
                 samples_seen=state.samples_seen,
-                prediction_available=False,
+                prediction_available=True,
                 target_available=target is not None,
+                readout_updated=readout_updated,
                 state_norm=diagnostics.state_norm,
                 state_delta=diagnostics.state_delta,
                 feature_norm=rms_norm(features_array),
                 saturation_rate=diagnostics.saturation_rate,
                 trace_norms=diagnostics.trace_norms,
+                prediction_error=prediction_error,
                 us_per_sample=elapsed_us,
             ),
             state=state,
         )
 
     def reset(self) -> None:
-        """Reset runtime counters and reservoir state."""
+        """Reset runtime counters, reservoir state, and readout state."""
 
         self._core = ReservoirCore.from_config(self.config)
+        self._readout = self._create_readout()
 
     def snapshot(self) -> ReservoirSnapshot:
         """Return an immutable checkpoint of the current numeric state."""
 
         return ReservoirSnapshot(
             state=clone_reservoir_state(self._core.state),
+            readout=self._readout.snapshot(),
             schema_version=SNAPSHOT_SCHEMA_VERSION,
         )
 
     def restore(self, snapshot: ReservoirSnapshot) -> None:
-        """Restore the reservoir runtime state from a numeric snapshot."""
+        """Restore the reservoir and readout runtime state from a numeric snapshot."""
 
         if not isinstance(snapshot, ReservoirSnapshot):
             msg = "snapshot must be a ReservoirSnapshot"
@@ -102,8 +111,20 @@ class AdaptiveReservoir:
             msg = "snapshot.state must be a ReservoirState"
             raise TypeError(msg)
         self._validate_snapshot_state(state)
-        self._core = ReservoirCore.from_config(self.config)
-        self._core.state = clone_reservoir_state(state)
+        new_core = ReservoirCore.from_config(self.config)
+        new_core.state = clone_reservoir_state(state)
+        new_readout = self._create_readout()
+        new_readout.restore(snapshot.readout)
+        self._core = new_core
+        self._readout = new_readout
+
+    def _create_readout(self) -> ReadoutProtocol:
+        features = extract_features(self._core.state, self.config.feature_mode)
+        return create_readout(
+            config=self.config.readout,
+            feature_dim=int(features.size),
+            dtype=self.config.dtype,
+        )
 
     def _validate_snapshot_state(self, state: ReservoirState) -> None:
         """Validate snapshot compatibility with the current model configuration."""
@@ -125,5 +146,5 @@ class AdaptiveReservoir:
             msg = "snapshot state dtype must match config.dtype"
             raise ValueError(msg)
         if state.samples_seen < 0:
-            msg = "snapshot samples_seen must be non-negative"
+            msg = "snapshot state samples_seen must be non-negative"
             raise ValueError(msg)
