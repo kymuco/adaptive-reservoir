@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import numpy as np
@@ -11,40 +10,12 @@ from numpy.typing import NDArray
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.result import AdaptiveChannels
 from adaptive_reservoir.core.state import ReservoirState
+from adaptive_reservoir.readout.base import ReadoutProtocol
 
 if TYPE_CHECKING:
     from adaptive_reservoir.topology.edges import EdgeList
 
 FloatArray = NDArray[np.floating]
-
-
-@runtime_checkable
-class ReadoutProtocol(Protocol):
-    """Protocol for scalar online readouts.
-
-    Runtime checks verify method presence only. They do not fully validate method
-    signatures.
-    """
-
-    def predict(self, features: FloatArray) -> float:
-        """Return a scalar prediction for the given feature vector."""
-
-        ...
-
-    def update(self, features: FloatArray, target: float) -> None:
-        """Update readout parameters from a supervised target."""
-
-        ...
-
-    def snapshot(self) -> Mapping[str, object]:
-        """Return a serializable readout snapshot."""
-
-        ...
-
-    def restore(self, snapshot: Mapping[str, object]) -> None:
-        """Restore readout state from a snapshot."""
-
-        ...
 
 
 @runtime_checkable
