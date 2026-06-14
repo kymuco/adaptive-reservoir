@@ -97,6 +97,11 @@ def test_replay_ridge_rejects_non_floating_dtype() -> None:
         ReplayRidgeReadout(feature_dim=1, dtype="int64")
 
 
+def test_replay_ridge_rejects_linalg_unsupported_dtype() -> None:
+    with pytest.raises(ValueError, match="dtype must be one of: float32, float64"):
+        ReplayRidgeReadout(feature_dim=1, dtype="float16")
+
+
 def test_replay_ridge_rejects_wrong_feature_dim() -> None:
     readout = ReplayRidgeReadout(feature_dim=2)
 
