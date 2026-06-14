@@ -323,6 +323,18 @@ def test_rls_restore_rejects_non_finite_covariance() -> None:
         readout.restore(bad_snapshot)
 
 
+def test_rls_restore_rejects_negative_definite_covariance() -> None:
+    readout = RLSReadout(feature_dim=1)
+    snapshot = readout.snapshot()
+    bad_snapshot = replace(
+        snapshot,
+        state=_state(snapshot, covariance=((-1.0, 0.0), (0.0, -1.0))),
+    )
+
+    with pytest.raises(ValueError, match="covariance must be positive semidefinite"):
+        readout.restore(bad_snapshot)
+
+
 def test_rls_restore_rejects_negative_samples_seen() -> None:
     readout = RLSReadout(feature_dim=1)
     snapshot = readout.snapshot()
