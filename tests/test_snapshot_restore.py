@@ -5,7 +5,14 @@ import dataclasses
 import numpy as np
 import pytest
 
-from adaptive_reservoir import AdaptiveReservoir, ReservoirConfig, ReservoirSnapshot, ReservoirState
+from adaptive_reservoir import (
+    AdaptiveReservoir,
+    ReadoutConfig,
+    ReservoirConfig,
+    ReservoirSnapshot,
+    ReservoirState,
+)
+from adaptive_reservoir.readout import ReadoutSnapshot
 
 
 def test_snapshot_captures_numeric_runtime_state() -> None:
@@ -14,8 +21,9 @@ def test_snapshot_captures_numeric_runtime_state() -> None:
     result = model.step([0.5, -0.25])
     snapshot = model.snapshot()
 
-    assert snapshot.schema_version == 1
+    assert snapshot.schema_version == 2
     assert snapshot.state.samples_seen == result.metrics.samples_seen
+    assert isinstance(snapshot.readout, ReadoutSnapshot)
     np.testing.assert_allclose(snapshot.state.activations, result.state.activations)
     np.testing.assert_allclose(snapshot.state.fast_trace, result.state.fast_trace)
     np.testing.assert_allclose(snapshot.state.mid_trace, result.state.mid_trace)
@@ -25,18 +33,20 @@ def test_snapshot_captures_numeric_runtime_state() -> None:
 def test_snapshot_is_independent_from_future_model_steps() -> None:
     model = AdaptiveReservoir(_config())
 
-    model.step([0.5, -0.25])
+    model.step([0.5, -0.25], target=1.0)
     snapshot = model.snapshot()
     captured_state = snapshot.state
+    captured_readout = snapshot.readout
 
-    model.step([0.25, 0.75])
-    model.step([-1.0, 0.5])
+    model.step([0.25, 0.75], target=-1.0)
+    model.step([-1.0, 0.5], target=0.25)
 
     np.testing.assert_allclose(snapshot.state.activations, captured_state.activations)
     np.testing.assert_allclose(snapshot.state.fast_trace, captured_state.fast_trace)
     np.testing.assert_allclose(snapshot.state.mid_trace, captured_state.mid_trace)
     np.testing.assert_allclose(snapshot.state.slow_trace, captured_state.slow_trace)
     assert snapshot.state.samples_seen == captured_state.samples_seen
+    assert snapshot.readout == captured_readout
 
 
 def test_restore_rewinds_model_state_and_continuation_is_deterministic() -> None:
@@ -54,10 +64,27 @@ def test_restore_rewinds_model_state_and_continuation_is_deterministic() -> None
     actual = model.step([0.25, 0.75])
 
     assert actual.metrics.samples_seen == expected.metrics.samples_seen
+    assert actual.prediction == pytest.approx(expected.prediction)
     np.testing.assert_allclose(actual.state.activations, expected.state.activations)
     np.testing.assert_allclose(actual.state.fast_trace, expected.state.fast_trace)
     np.testing.assert_allclose(actual.state.mid_trace, expected.state.mid_trace)
     np.testing.assert_allclose(actual.state.slow_trace, expected.state.slow_trace)
+
+
+def test_restore_recovers_readout_prediction() -> None:
+    model = AdaptiveReservoir(_nlms_config())
+
+    model.step([0.5, -0.25], target=1.0)
+    snapshot = model.snapshot()
+    expected = model.step([0.5, -0.25]).prediction
+
+    model.step([0.25, 0.75], target=-2.0)
+    model.step([-1.0, 0.5], target=3.0)
+
+    model.restore(snapshot)
+    actual = model.step([0.5, -0.25]).prediction
+
+    assert actual == pytest.approx(expected)
 
 
 def test_reset_matches_fresh_model_behavior() -> None:
@@ -65,14 +92,15 @@ def test_reset_matches_fresh_model_behavior() -> None:
     model = AdaptiveReservoir(config)
     fresh = AdaptiveReservoir(config)
 
-    model.step([0.5, -0.25])
-    model.step([0.25, 0.75])
+    model.step([0.5, -0.25], target=1.0)
+    model.step([0.25, 0.75], target=-1.0)
     model.reset()
 
     reset_result = model.step([0.5, -0.25])
     fresh_result = fresh.step([0.5, -0.25])
 
     assert reset_result.metrics.samples_seen == fresh_result.metrics.samples_seen
+    assert reset_result.prediction == pytest.approx(fresh_result.prediction)
     np.testing.assert_allclose(reset_result.state.activations, fresh_result.state.activations)
     np.testing.assert_allclose(reset_result.state.fast_trace, fresh_result.state.fast_trace)
     np.testing.assert_allclose(reset_result.state.mid_trace, fresh_result.state.mid_trace)
@@ -83,7 +111,7 @@ def test_restore_rejects_wrong_snapshot_type() -> None:
     model = AdaptiveReservoir(_config())
 
     with pytest.raises(TypeError, match="ReservoirSnapshot"):
-        model.restore({"schema_version": 1, "state": None})  # type: ignore[arg-type]
+        model.restore({"schema_version": 2, "state": None})  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -97,6 +125,7 @@ def test_restore_rejects_wrong_snapshot_type() -> None:
                     mid_trace=np.zeros(3, dtype=np.float64),
                     slow_trace=np.zeros(3, dtype=np.float64),
                 ),
+                readout=_readout_snapshot(),
             ),
             "shape",
         ),
@@ -108,6 +137,7 @@ def test_restore_rejects_wrong_snapshot_type() -> None:
                     mid_trace=np.zeros(4, dtype=np.float32),
                     slow_trace=np.zeros(4, dtype=np.float32),
                 ),
+                readout=_readout_snapshot(),
             ),
             "dtype",
         ),
@@ -119,9 +149,14 @@ def test_restore_rejects_wrong_snapshot_type() -> None:
                     mid_trace=np.zeros(4, dtype=np.float64),
                     slow_trace=np.zeros(4, dtype=np.float64),
                 ),
+                readout=_readout_snapshot(),
                 schema_version=999,
             ),
             "schema_version",
+        ),
+        (
+            dataclasses.replace(_valid_snapshot(), readout=_bad_readout_snapshot()),
+            "snapshot name must be",
         ),
     ],
 )
@@ -132,13 +167,35 @@ def test_restore_rejects_incompatible_snapshot(snapshot: ReservoirSnapshot, mess
         model.restore(snapshot)
 
 
+def test_restore_is_atomic_when_readout_restore_fails() -> None:
+    model = AdaptiveReservoir(_nlms_config())
+    model.step([0.5, -0.25], target=1.0)
+    current = model.snapshot()
+    bad_snapshot = dataclasses.replace(
+        current,
+        readout=dataclasses.replace(current.readout, name="other"),
+    )
+
+    with pytest.raises(ValueError, match="snapshot name must be"):
+        model.restore(bad_snapshot)
+
+    after = model.snapshot()
+    np.testing.assert_allclose(after.state.activations, current.state.activations)
+    np.testing.assert_allclose(after.state.fast_trace, current.state.fast_trace)
+    np.testing.assert_allclose(after.state.mid_trace, current.state.mid_trace)
+    np.testing.assert_allclose(after.state.slow_trace, current.state.slow_trace)
+    assert after.state.samples_seen == current.state.samples_seen
+    assert after.readout == current.readout
+
+
 def test_snapshot_contains_no_semantic_or_domain_fields() -> None:
     model = AdaptiveReservoir(_config())
     snapshot = model.snapshot()
 
     assert {field.name for field in dataclasses.fields(snapshot)} == {
-        "state",
+        "readout",
         "schema_version",
+        "state",
     }
     forbidden_names = {
         "raw_inputs",
@@ -166,3 +223,26 @@ def _config() -> ReservoirConfig:
         seed=42,
         feature_mode="state_slow_raw",
     )
+
+
+def _nlms_config() -> ReservoirConfig:
+    return ReservoirConfig(
+        input_dim=2,
+        n_cells=4,
+        topology="ring_shortcuts",
+        seed=42,
+        feature_mode="state_slow_raw",
+        readout=ReadoutConfig(name="nlms", learning_rate=0.5),
+    )
+
+
+def _valid_snapshot() -> ReservoirSnapshot:
+    return AdaptiveReservoir(_config()).snapshot()
+
+
+def _readout_snapshot() -> ReadoutSnapshot:
+    return _valid_snapshot().readout
+
+
+def _bad_readout_snapshot() -> ReadoutSnapshot:
+    return dataclasses.replace(_readout_snapshot(), name="other")
