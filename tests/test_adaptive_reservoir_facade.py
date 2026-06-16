@@ -80,7 +80,7 @@ def test_adaptive_reservoir_step_validates_input_dim() -> None:
 def test_adaptive_reservoir_step_rejects_non_finite_input() -> None:
     model = AdaptiveReservoir(_config())
 
-    with pytest.raises(ValueError, match="all input values must be finite"):
+    with pytest.raises(ValueError, match="x must contain only finite values"):
         model.step([1.0, float("nan")])
 
 
