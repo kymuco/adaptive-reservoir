@@ -91,6 +91,19 @@ class AdaptiveReservoir:
             state=state,
         )
 
+    def predict(self, x: Sequence[float] | None = None) -> float:
+        """Return a readout prediction without mutating runtime state."""
+
+        if x is None:
+            features = extract_features(self._core.state, self.config.feature_mode)
+            return self._readout.predict(features)
+
+        temp_core = ReservoirCore.from_config(self.config)
+        temp_core.state = clone_reservoir_state(self._core.state)
+        temp_state = temp_core.step(x)
+        features = extract_features(temp_state, self.config.feature_mode)
+        return self._readout.predict(features)
+
     def reset(self) -> None:
         """Reset runtime counters, reservoir state, readout state, and channels."""
 
