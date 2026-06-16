@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
-from adaptive_reservoir import AdaptiveReservoir, ReadoutConfig, ReservoirConfig
+from adaptive_reservoir import (
+    AdaptiveReservoir,
+    ReadoutConfig,
+    ReservoirConfig,
+    ReservoirSnapshot,
+)
 
 
 def test_predict_without_input_returns_current_state_prediction() -> None:
@@ -32,7 +38,7 @@ def test_predict_without_input_does_not_mutate_snapshot() -> None:
     after = model.snapshot()
 
     assert isinstance(prediction, float)
-    assert after == before
+    _assert_snapshots_equal(after, before)
 
 
 def test_predict_with_input_does_not_mutate_snapshot() -> None:
@@ -44,7 +50,7 @@ def test_predict_with_input_does_not_mutate_snapshot() -> None:
     after = model.snapshot()
 
     assert isinstance(prediction, float)
-    assert after == before
+    _assert_snapshots_equal(after, before)
 
 
 def test_predict_with_input_matches_step_prediction_after_restore() -> None:
@@ -98,3 +104,14 @@ def _config(readout: ReadoutConfig | None = None) -> ReservoirConfig:
         feature_mode="state_slow_raw",
         readout=readout or ReadoutConfig(name="sliding_ridge"),
     )
+
+
+def _assert_snapshots_equal(actual: ReservoirSnapshot, expected: ReservoirSnapshot) -> None:
+    assert actual.schema_version == expected.schema_version
+    assert actual.state.samples_seen == expected.state.samples_seen
+    np.testing.assert_allclose(actual.state.activations, expected.state.activations)
+    np.testing.assert_allclose(actual.state.fast_trace, expected.state.fast_trace)
+    np.testing.assert_allclose(actual.state.mid_trace, expected.state.mid_trace)
+    np.testing.assert_allclose(actual.state.slow_trace, expected.state.slow_trace)
+    assert actual.readout == expected.readout
+    assert actual.channels == expected.channels
