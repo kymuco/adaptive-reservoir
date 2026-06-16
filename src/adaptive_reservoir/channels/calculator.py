@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -11,8 +12,24 @@ from adaptive_reservoir.core.result import AdaptiveChannels
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.readout.base import FloatArray, validate_features, validate_target
 
+CHANNEL_CALCULATOR_SNAPSHOT_SCHEMA_VERSION = 1
 _NOVELTY_BASELINE_MULTIPLIER = 3.0
 _MAX_FLOAT64 = float(np.finfo(np.float64).max)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ChannelCalculatorSnapshot:
+    """Immutable numeric checkpoint for adaptive channel calculator state."""
+
+    samples_seen: int
+    feature_dim: int | None
+    feature_window: tuple[tuple[float, ...], ...]
+    activation_window: tuple[tuple[float, ...], ...]
+    state_delta_window: tuple[float, ...]
+    prediction_window: tuple[float, ...]
+    prediction_error_window: tuple[float, ...]
+    previous_activations: tuple[float, ...] | None
+    schema_version: int = CHANNEL_CALCULATOR_SNAPSHOT_SCHEMA_VERSION
 
 
 class AdaptiveChannelCalculator:
@@ -86,6 +103,84 @@ class AdaptiveChannelCalculator:
         self._prediction_window.clear()
         self._prediction_error_window.clear()
         self._previous_activations = None
+
+    def snapshot(self) -> ChannelCalculatorSnapshot:
+        """Return an immutable numeric checkpoint of channel runtime state."""
+
+        return ChannelCalculatorSnapshot(
+            samples_seen=self._samples_seen,
+            feature_dim=self._feature_dim,
+            feature_window=_vector_window_to_tuple(self._feature_window),
+            activation_window=_vector_window_to_tuple(self._activation_window),
+            state_delta_window=tuple(self._state_delta_window),
+            prediction_window=tuple(self._prediction_window),
+            prediction_error_window=tuple(self._prediction_error_window),
+            previous_activations=_optional_vector_to_tuple(self._previous_activations),
+        )
+
+    def restore(self, snapshot: ChannelCalculatorSnapshot) -> None:
+        """Restore numeric channel runtime state from a snapshot."""
+
+        if not isinstance(snapshot, ChannelCalculatorSnapshot):
+            msg = "snapshot must be a ChannelCalculatorSnapshot"
+            raise TypeError(msg)
+        if snapshot.schema_version != CHANNEL_CALCULATOR_SNAPSHOT_SCHEMA_VERSION:
+            msg = f"unsupported channel snapshot schema_version: {snapshot.schema_version}"
+            raise ValueError(msg)
+        if snapshot.samples_seen < 0:
+            msg = "channel snapshot samples_seen must be non-negative"
+            raise ValueError(msg)
+
+        feature_dim = _validate_optional_positive_int(
+            "feature_dim",
+            snapshot.feature_dim,
+        )
+        feature_window, restored_feature_dim = _restore_vector_window(
+            snapshot.feature_window,
+            name="feature_window",
+            expected_dim=feature_dim,
+            max_len=self.config.novelty_window,
+            dtype=self.dtype,
+        )
+        if feature_dim is None:
+            feature_dim = restored_feature_dim
+        activation_window, activation_dim = _restore_vector_window(
+            snapshot.activation_window,
+            name="activation_window",
+            expected_dim=None,
+            max_len=self.config.novelty_window,
+            dtype=self.dtype,
+        )
+        previous_activations = _restore_optional_vector(
+            snapshot.previous_activations,
+            name="previous_activations",
+            expected_dim=activation_dim,
+            dtype=self.dtype,
+        )
+        state_delta_window = _restore_float_window(
+            snapshot.state_delta_window,
+            name="state_delta_window",
+            max_len=self.config.stability_window,
+        )
+        prediction_window = _restore_float_window(
+            snapshot.prediction_window,
+            name="prediction_window",
+            max_len=self.config.stability_window,
+        )
+        prediction_error_window = _restore_float_window(
+            snapshot.prediction_error_window,
+            name="prediction_error_window",
+            max_len=self.config.drift_window,
+        )
+
+        self._samples_seen = snapshot.samples_seen
+        self._feature_dim = feature_dim
+        self._feature_window = feature_window
+        self._activation_window = activation_window
+        self._state_delta_window = state_delta_window
+        self._prediction_window = prediction_window
+        self._prediction_error_window = prediction_error_window
+        self._previous_activations = previous_activations
 
     def update(
         self,
@@ -304,6 +399,15 @@ def _validate_dtype(value: str) -> str:
     return dtype.name
 
 
+def _validate_optional_positive_int(name: str, value: int | None) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or value <= 0:
+        msg = f"{name} must be a positive integer or None"
+        raise ValueError(msg)
+    return value
+
+
 def _validate_prediction(value: object) -> float:
     if isinstance(value, (str, bytes, bool)):
         msg = "prediction must be numeric"
@@ -407,6 +511,99 @@ def _safe_abs_difference(left: float, right: float) -> float:
     return scale * normalized_difference
 
 
+def _vector_window_to_tuple(values: list[FloatArray]) -> tuple[tuple[float, ...], ...]:
+    return tuple(_vector_to_tuple(value) for value in values)
+
+
+def _optional_vector_to_tuple(value: FloatArray | None) -> tuple[float, ...] | None:
+    return None if value is None else _vector_to_tuple(value)
+
+
+def _vector_to_tuple(value: FloatArray) -> tuple[float, ...]:
+    return tuple(float(item) for item in np.asarray(value, dtype=np.float64))
+
+
+def _restore_vector_window(
+    values: tuple[tuple[float, ...], ...],
+    *,
+    name: str,
+    expected_dim: int | None,
+    max_len: int,
+    dtype: str,
+) -> tuple[list[FloatArray], int | None]:
+    if not isinstance(values, tuple):
+        msg = f"{name} must be a tuple"
+        raise ValueError(msg)
+    if len(values) > max_len:
+        msg = f"{name} length exceeds configured window"
+        raise ValueError(msg)
+    restored: list[FloatArray] = []
+    dimension = expected_dim
+    for index, vector in enumerate(values):
+        array, dimension = _restore_vector(
+            vector,
+            name=f"{name}[{index}]",
+            expected_dim=dimension,
+            dtype=dtype,
+        )
+        restored.append(array)
+    return restored, dimension
+
+
+def _restore_optional_vector(
+    value: tuple[float, ...] | None,
+    *,
+    name: str,
+    expected_dim: int | None,
+    dtype: str,
+) -> FloatArray | None:
+    if value is None:
+        return None
+    array, _ = _restore_vector(
+        value,
+        name=name,
+        expected_dim=expected_dim,
+        dtype=dtype,
+    )
+    return array
+
+
+def _restore_vector(
+    value: tuple[float, ...],
+    *,
+    name: str,
+    expected_dim: int | None,
+    dtype: str,
+) -> tuple[FloatArray, int]:
+    if not isinstance(value, tuple):
+        msg = f"{name} must be a tuple"
+        raise ValueError(msg)
+    if not value:
+        msg = f"{name} must not be empty"
+        raise ValueError(msg)
+    if expected_dim is not None and len(value) != expected_dim:
+        msg = f"{name} dimension must match {expected_dim}"
+        raise ValueError(msg)
+    array = np.asarray([_finite_float(item) for item in value], dtype=dtype)
+    array.setflags(write=False)
+    return array, int(array.size)
+
+
+def _restore_float_window(
+    values: tuple[float, ...],
+    *,
+    name: str,
+    max_len: int,
+) -> list[float]:
+    if not isinstance(values, tuple):
+        msg = f"{name} must be a tuple"
+        raise ValueError(msg)
+    if len(values) > max_len:
+        msg = f"{name} length exceeds configured window"
+        raise ValueError(msg)
+    return [_finite_float(value) for value in values]
+
+
 def _max_abs(values: FloatArray) -> float:
     magnitudes = np.abs(np.asarray(values, dtype=np.float64))
     return float(np.max(magnitudes)) if magnitudes.size > 0 else 0.0
@@ -479,4 +676,8 @@ def _safe_channels(
     )
 
 
-__all__ = ["AdaptiveChannelCalculator"]
+__all__ = [
+    "AdaptiveChannelCalculator",
+    "ChannelCalculatorSnapshot",
+    "CHANNEL_CALCULATOR_SNAPSHOT_SCHEMA_VERSION",
+]

@@ -1,5 +1,6 @@
 """CPU-friendly temporal adaptation layer for software agents and streaming systems."""
 
+from adaptive_reservoir.channels import ChannelCalculatorSnapshot
 from adaptive_reservoir.core.adaptive_reservoir import AdaptiveReservoir
 from adaptive_reservoir.core.config import (
     ChannelConfig,
@@ -32,6 +33,7 @@ __all__ = [
     "AdaptiveReservoir",
     "AdaptiveStepResult",
     "ChannelCalculatorProtocol",
+    "ChannelCalculatorSnapshot",
     "ChannelConfig",
     "FeatureExtractorProtocol",
     "ReadoutConfig",
