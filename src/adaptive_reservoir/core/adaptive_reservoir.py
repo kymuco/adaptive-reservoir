@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 import time
 from collections.abc import Sequence
 
@@ -18,6 +17,7 @@ from adaptive_reservoir.core.snapshot import (
     clone_reservoir_state,
 )
 from adaptive_reservoir.core.state import ReservoirState
+from adaptive_reservoir.core.validation import validate_optional_target
 from adaptive_reservoir.diagnostics import calculate_state_diagnostics, rms_norm
 from adaptive_reservoir.features import extract_features
 from adaptive_reservoir.readout.base import ReadoutProtocol
@@ -43,9 +43,7 @@ class AdaptiveReservoir:
         """Process one numeric event vector and return an adaptive step result."""
 
         start = time.perf_counter()
-        if target is not None and not math.isfinite(target):
-            msg = "target must be finite when provided"
-            raise ValueError(msg)
+        target_value = validate_optional_target(target)
 
         previous_state = self._core.state
         state = self._core.step(x)
@@ -56,13 +54,13 @@ class AdaptiveReservoir:
             state=state,
             features=features_array,
             prediction=prediction,
-            target=target,
+            target=target_value,
         )
         prediction_error = None
         readout_updated = False
-        if target is not None:
-            prediction_error = abs(float(target) - prediction)
-            self._readout.update(features_array, target)
+        if target_value is not None:
+            prediction_error = abs(target_value - prediction)
+            self._readout.update(features_array, target_value)
             readout_updated = True
         diagnostics = calculate_state_diagnostics(
             previous=previous_state,
@@ -78,7 +76,7 @@ class AdaptiveReservoir:
             metrics=StepMetrics(
                 samples_seen=state.samples_seen,
                 prediction_available=True,
-                target_available=target is not None,
+                target_available=target_value is not None,
                 readout_updated=readout_updated,
                 state_norm=diagnostics.state_norm,
                 state_delta=diagnostics.state_delta,
