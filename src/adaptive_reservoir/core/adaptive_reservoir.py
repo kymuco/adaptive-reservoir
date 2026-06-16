@@ -8,7 +8,7 @@ from collections.abc import Sequence
 
 import numpy as np
 
-from adaptive_reservoir.channels import AdaptiveChannelCalculator
+from adaptive_reservoir.channels.calculator import AdaptiveChannelCalculator
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveStepResult, StepMetrics
