@@ -218,10 +218,10 @@ def test_restore_rejects_bad_metrics_snapshot() -> None:
     model = AdaptiveReservoir(_config())
     snapshot = dataclasses.replace(
         _valid_snapshot(),
-        metrics=dataclasses.replace(_metrics_snapshot(), schema_version=999),
+        metrics=object(),  # type: ignore[arg-type]
     )
 
-    with pytest.raises(ValueError, match="schema_version"):
+    with pytest.raises(TypeError, match="snapshot.metrics"):
         model.restore(snapshot)
 
 
