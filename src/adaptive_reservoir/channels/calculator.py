@@ -126,7 +126,7 @@ class AdaptiveChannelCalculator:
                 max_len=self.config.stability_window,
             )
             if prediction_value is not None
-            else list(self._prediction_window)
+            else []
         )
         stability = self._calculate_stability(
             state_delta_values=state_delta_values,
@@ -301,19 +301,23 @@ def _volatility_instability(values: list[float], *, epsilon: float) -> float:
     if len(values) < 2:
         return 0.0
     vector = np.asarray(values, dtype=np.float64)
-    volatility = _safe_std(vector)
-    if volatility <= epsilon:
+    scale = _max_abs(vector)
+    if scale == 0.0:
         return 0.0
-    scale = float(np.mean(np.abs(vector)))
-    return _clip01(volatility / (volatility + scale + epsilon))
+    normalized = vector / scale
+    mean = float(np.mean(normalized))
+    centered = normalized - mean
+    volatility = _rms_value(centered)
+    normalized_epsilon = epsilon / scale
+    if volatility <= normalized_epsilon:
+        return 0.0
+    magnitude = float(np.mean(np.abs(normalized)))
+    return _clip01(volatility / (volatility + magnitude + normalized_epsilon))
 
 
-def _safe_std(values: FloatArray) -> float:
-    vector = np.asarray(values, dtype=np.float64)
-    if vector.size < 2:
-        return 0.0
-    centered = vector - float(np.mean(vector))
-    return _rms_value(centered)
+def _max_abs(values: FloatArray) -> float:
+    magnitudes = np.abs(np.asarray(values, dtype=np.float64))
+    return float(np.max(magnitudes)) if magnitudes.size > 0 else 0.0
 
 
 def _bounded_with_candidate(
