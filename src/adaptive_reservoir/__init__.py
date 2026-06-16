@@ -8,6 +8,7 @@ from adaptive_reservoir.core.config import (
     ReservoirConfig,
     TraceConfig,
 )
+from adaptive_reservoir.core.metrics import AdaptiveReservoirMetricsSnapshot
 from adaptive_reservoir.core.protocols import (
     ChannelCalculatorProtocol,
     FeatureExtractorProtocol,
@@ -31,6 +32,7 @@ __version__ = "0.0.0"
 __all__ = [
     "AdaptiveChannels",
     "AdaptiveReservoir",
+    "AdaptiveReservoirMetricsSnapshot",
     "AdaptiveStepResult",
     "ChannelCalculatorProtocol",
     "ChannelCalculatorSnapshot",
