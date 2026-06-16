@@ -114,6 +114,24 @@ class AdaptiveChannelCalculator:
             activations=activations,
         )
         state_delta = self._calculate_state_delta(activations)
+        state_delta_values = _bounded_with_candidate(
+            self._state_delta_window,
+            state_delta,
+            max_len=self.config.stability_window,
+        )
+        prediction_values = (
+            _bounded_with_candidate(
+                self._prediction_window,
+                prediction_value,
+                max_len=self.config.stability_window,
+            )
+            if prediction_value is not None
+            else []
+        )
+        stability = self._calculate_stability(
+            state_delta_values=state_delta_values,
+            prediction_values=prediction_values,
+        )
 
         if self._feature_dim is None:
             self._feature_dim = int(feature_vector.size)
@@ -140,7 +158,7 @@ class AdaptiveChannelCalculator:
 
         return _safe_channels(
             novelty=novelty,
-            stability=1.0,
+            stability=stability,
             drift_pressure=0.0,
             confidence=0.0,
             saturation=0.0,
@@ -177,6 +195,28 @@ class AdaptiveChannelCalculator:
             epsilon=self.config.epsilon,
         )
         return _clip01(max(feature_score, state_score))
+
+    def _calculate_stability(
+        self,
+        *,
+        state_delta_values: list[float],
+        prediction_values: list[float],
+    ) -> float:
+        components = [
+            _volatility_instability(
+                state_delta_values,
+                epsilon=self.config.epsilon,
+            )
+        ]
+        if len(prediction_values) >= 2:
+            components.append(
+                _volatility_instability(
+                    prediction_values,
+                    epsilon=self.config.epsilon,
+                )
+            )
+        instability = float(np.mean(components)) if components else 0.0
+        return _clip01(1.0 - instability)
 
     def _append_feature(self, features: FloatArray) -> None:
         self._feature_window.append(features)
@@ -255,6 +295,42 @@ def _distance_to_recent_mean_score(
     baseline = float(np.mean(history_distances))
     denominator = distance + _NOVELTY_BASELINE_MULTIPLIER * baseline + epsilon
     return _clip01(distance / denominator)
+
+
+def _volatility_instability(values: list[float], *, epsilon: float) -> float:
+    if len(values) < 2:
+        return 0.0
+    vector = np.asarray(values, dtype=np.float64)
+    scale = _max_abs(vector)
+    if scale == 0.0:
+        return 0.0
+    normalized = vector / scale
+    mean = float(np.mean(normalized))
+    centered = normalized - mean
+    volatility = _rms_value(centered)
+    normalized_epsilon = epsilon / scale
+    if volatility <= normalized_epsilon:
+        return 0.0
+    magnitude = float(np.mean(np.abs(normalized)))
+    return _clip01(volatility / (volatility + magnitude + normalized_epsilon))
+
+
+def _max_abs(values: FloatArray) -> float:
+    magnitudes = np.abs(np.asarray(values, dtype=np.float64))
+    return float(np.max(magnitudes)) if magnitudes.size > 0 else 0.0
+
+
+def _bounded_with_candidate(
+    values: list[float],
+    value: float,
+    *,
+    max_len: int,
+) -> list[float]:
+    result = [*values, _finite_float(value)]
+    overflow = len(result) - max_len
+    if overflow > 0:
+        del result[:overflow]
+    return result
 
 
 def _rms_distance(left: FloatArray, right: FloatArray) -> float:
