@@ -250,7 +250,7 @@ def test_restore_is_atomic_when_metrics_restore_fails() -> None:
     current = model.snapshot()
     bad_snapshot = dataclasses.replace(
         current,
-        metrics=dataclasses.replace(current.metrics, samples_seen=0),
+        metrics=dataclasses.replace(current.metrics, samples_seen=2),
     )
 
     with pytest.raises(ValueError, match="metrics samples_seen"):
