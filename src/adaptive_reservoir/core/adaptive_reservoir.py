@@ -8,9 +8,10 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from adaptive_reservoir.channels import AdaptiveChannelCalculator
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.reservoir import ReservoirCore
-from adaptive_reservoir.core.result import AdaptiveChannels, AdaptiveStepResult, StepMetrics
+from adaptive_reservoir.core.result import AdaptiveStepResult, StepMetrics
 from adaptive_reservoir.core.snapshot import (
     SNAPSHOT_SCHEMA_VERSION,
     ReservoirSnapshot,
@@ -30,6 +31,7 @@ class AdaptiveReservoir:
         self.config = config
         self._core = ReservoirCore.from_config(config)
         self._readout = self._create_readout()
+        self._channels = self._create_channel_calculator()
 
     @property
     def samples_seen(self) -> int:
@@ -49,6 +51,13 @@ class AdaptiveReservoir:
         state = self._core.step(x)
         features_array = extract_features(state, self.config.feature_mode)
         prediction = self._readout.predict(features_array)
+        channels = self._channels.update(
+            input=x,
+            state=state,
+            features=features_array,
+            prediction=prediction,
+            target=target,
+        )
         prediction_error = None
         readout_updated = False
         if target is not None:
@@ -65,7 +74,7 @@ class AdaptiveReservoir:
         return AdaptiveStepResult(
             prediction=prediction,
             features=features,
-            channels=AdaptiveChannels(saturation=diagnostics.saturation_rate),
+            channels=channels,
             metrics=StepMetrics(
                 samples_seen=state.samples_seen,
                 prediction_available=True,
@@ -74,7 +83,7 @@ class AdaptiveReservoir:
                 state_norm=diagnostics.state_norm,
                 state_delta=diagnostics.state_delta,
                 feature_norm=rms_norm(features_array),
-                saturation_rate=diagnostics.saturation_rate,
+                saturation_rate=channels.saturation,
                 trace_norms=diagnostics.trace_norms,
                 prediction_error=prediction_error,
                 us_per_sample=elapsed_us,
@@ -83,10 +92,11 @@ class AdaptiveReservoir:
         )
 
     def reset(self) -> None:
-        """Reset runtime counters, reservoir state, and readout state."""
+        """Reset runtime counters, reservoir state, readout state, and channels."""
 
         self._core = ReservoirCore.from_config(self.config)
         self._readout = self._create_readout()
+        self._channels = self._create_channel_calculator()
 
     def snapshot(self) -> ReservoirSnapshot:
         """Return an immutable checkpoint of the current numeric state."""
@@ -94,11 +104,12 @@ class AdaptiveReservoir:
         return ReservoirSnapshot(
             state=clone_reservoir_state(self._core.state),
             readout=self._readout.snapshot(),
+            channels=self._channels.snapshot(),
             schema_version=SNAPSHOT_SCHEMA_VERSION,
         )
 
     def restore(self, snapshot: ReservoirSnapshot) -> None:
-        """Restore the reservoir and readout runtime state from a numeric snapshot."""
+        """Restore the reservoir, readout, and channel runtime state."""
 
         if not isinstance(snapshot, ReservoirSnapshot):
             msg = "snapshot must be a ReservoirSnapshot"
@@ -115,14 +126,23 @@ class AdaptiveReservoir:
         new_core.state = clone_reservoir_state(state)
         new_readout = self._create_readout()
         new_readout.restore(snapshot.readout)
+        new_channels = self._create_channel_calculator()
+        new_channels.restore(snapshot.channels)
         self._core = new_core
         self._readout = new_readout
+        self._channels = new_channels
 
     def _create_readout(self) -> ReadoutProtocol:
         features = extract_features(self._core.state, self.config.feature_mode)
         return create_readout(
             config=self.config.readout,
             feature_dim=int(features.size),
+            dtype=self.config.dtype,
+        )
+
+    def _create_channel_calculator(self) -> AdaptiveChannelCalculator:
+        return AdaptiveChannelCalculator(
+            config=self.config.channels,
             dtype=self.config.dtype,
         )
 
