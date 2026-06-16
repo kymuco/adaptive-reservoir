@@ -116,7 +116,6 @@ class ReplayRidgeReadout:
                 "weights": tuple(float(value) for value in self._weights),
                 "bias": self._bias,
                 "samples_seen": self._samples_seen,
-                "solve_count": self._solve_count,
                 "features_buffer": tuple(
                     tuple(float(value) for value in row)
                     for row in self._features_buffer
@@ -199,7 +198,7 @@ class ReplayRidgeReadout:
         if samples_seen < 0:
             msg = "snapshot samples_seen must be non-negative"
             raise ValueError(msg)
-        solve_count = _optional_non_negative_int(state, "solve_count", default=0)
+        self._solve_count = 0
         features_buffer = _validate_features_buffer(
             state.get("features_buffer"),
             feature_dim=self.feature_dim,
@@ -219,7 +218,6 @@ class ReplayRidgeReadout:
         self._weights = restored_weights
         self._bias = bias
         self._samples_seen = samples_seen
-        self._solve_count = solve_count
         self._features_buffer = features_buffer
         self._targets_buffer = targets_buffer
 
@@ -258,19 +256,6 @@ def _required_int(state: Mapping[str, object], key: str) -> int:
     value = state.get(key)
     if isinstance(value, bool) or not isinstance(value, int):
         msg = f"snapshot state.{key} must be an integer"
-        raise ValueError(msg)
-    return value
-
-
-def _optional_non_negative_int(
-    state: Mapping[str, object],
-    key: str,
-    *,
-    default: int,
-) -> int:
-    value = state.get(key, default)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        msg = f"snapshot state.{key} must be a non-negative integer"
         raise ValueError(msg)
     return value
 
