@@ -91,7 +91,7 @@ def test_predict_rejects_bad_input_shape() -> None:
 def test_predict_rejects_non_finite_input() -> None:
     model = AdaptiveReservoir(_config())
 
-    with pytest.raises(ValueError, match="all input values must be finite"):
+    with pytest.raises(ValueError, match="x must contain only finite values"):
         model.predict([1.0, float("nan")])
 
 
