@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
 
 import numpy as np
 
@@ -100,6 +99,8 @@ class AdaptiveChannelCalculator:
         target_value = None if target is None else validate_target(target)
         state_delta = self._calculate_state_delta(state)
 
+        if self._feature_dim is None:
+            self._feature_dim = int(feature_vector.size)
         self._append_feature(feature_vector)
         _append_bounded(
             self._state_delta_window,
@@ -128,14 +129,11 @@ class AdaptiveChannelCalculator:
         )
 
     def _validate_features(self, features: object) -> FloatArray:
-        vector = validate_features(
+        return validate_features(
             features,
             expected_dim=self._feature_dim,
             dtype=self.dtype,
         )
-        if self._feature_dim is None:
-            self._feature_dim = int(vector.size)
-        return vector
 
     def _append_feature(self, features: FloatArray) -> None:
         self._feature_window.append(features)
