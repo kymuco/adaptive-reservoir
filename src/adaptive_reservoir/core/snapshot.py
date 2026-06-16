@@ -7,19 +7,21 @@ from dataclasses import dataclass
 import numpy as np
 
 from adaptive_reservoir.channels import ChannelCalculatorSnapshot
+from adaptive_reservoir.core.metrics import AdaptiveReservoirMetricsSnapshot
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.readout.base import ReadoutSnapshot
 
-SNAPSHOT_SCHEMA_VERSION = 3
+SNAPSHOT_SCHEMA_VERSION = 4
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReservoirSnapshot:
-    """Immutable numeric checkpoint for reservoir, readout, and channels."""
+    """Immutable numeric checkpoint for reservoir, readout, channels, and metrics."""
 
     state: ReservoirState
     readout: ReadoutSnapshot
     channels: ChannelCalculatorSnapshot
+    metrics: AdaptiveReservoirMetricsSnapshot
     schema_version: int = SNAPSHOT_SCHEMA_VERSION
 
 

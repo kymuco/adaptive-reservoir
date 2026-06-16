@@ -17,6 +17,7 @@ def test_sliding_ridge_predict_starts_from_zero() -> None:
 
     assert readout.predict([1.0, -2.0]) == 0.0
     assert readout.samples_seen == 0
+    assert readout.solve_count == 0
     assert readout.window_count == 0
     assert readout.bias == 0.0
     np.testing.assert_allclose(readout.weights, np.zeros(2))
@@ -32,6 +33,7 @@ def test_sliding_ridge_updates_after_interval_one() -> None:
     after = readout.predict(features)
 
     assert readout.samples_seen == 1
+    assert readout.solve_count == 1
     assert readout.window_count == 1
     assert abs(target - after) < abs(target - before)
 
@@ -48,6 +50,7 @@ def test_sliding_ridge_update_interval_delays_refit() -> None:
     assert after_first == 0.0
     assert after_second != 0.0
     assert readout.samples_seen == 2
+    assert readout.solve_count == 1
     assert readout.window_count == 2
 
 
@@ -80,6 +83,7 @@ def test_sliding_ridge_learns_recent_linear_mapping() -> None:
     ]:
         readout.update(features, target)
 
+    assert readout.solve_count == 4
     assert readout.predict([4.0]) == pytest.approx(9.0, abs=1e-2)
 
 
@@ -187,11 +191,13 @@ def test_sliding_ridge_snapshot_contains_numeric_state_only() -> None:
         "feature_dim",
         "features_window",
         "samples_seen",
+        "solve_count",
         "targets_window",
         "update_interval",
         "weights",
         "window_size",
     }
+    assert snapshot.state["solve_count"] == readout.solve_count
     assert "raw_inputs" not in snapshot.state
     assert "target_history" not in snapshot.state
     assert "messages" not in snapshot.state
@@ -215,11 +221,13 @@ def test_sliding_ridge_snapshot_is_independent_from_future_updates() -> None:
     snapshot = readout.snapshot()
     expected_features = snapshot.state["features_window"]
     expected_targets = snapshot.state["targets_window"]
+    expected_solve_count = snapshot.state["solve_count"]
 
     readout.update([2.0], 5.0)
 
     assert snapshot.state["features_window"] == expected_features
     assert snapshot.state["targets_window"] == expected_targets
+    assert snapshot.state["solve_count"] == expected_solve_count
 
 
 def test_sliding_ridge_restore_recovers_prediction() -> None:
@@ -240,7 +248,20 @@ def test_sliding_ridge_restore_recovers_prediction() -> None:
 
     assert actual == pytest.approx(expected)
     assert readout.samples_seen == snapshot.state["samples_seen"]
+    assert readout.solve_count == snapshot.state["solve_count"]
     assert readout.window_count == len(snapshot.state["targets_window"])
+
+
+def test_sliding_ridge_restore_defaults_missing_solve_count_to_zero() -> None:
+    readout = SlidingWindowRidgeReadout(feature_dim=1)
+    snapshot = readout.snapshot()
+    legacy_state = dict(snapshot.state)
+    legacy_state.pop("solve_count")
+
+    readout.update([1.0], 1.0)
+    readout.restore(replace(snapshot, state=legacy_state))
+
+    assert readout.solve_count == 0
 
 
 def test_sliding_ridge_restore_rejects_wrong_snapshot_type() -> None:
@@ -412,4 +433,13 @@ def test_sliding_ridge_restore_rejects_samples_seen_less_than_window_length() ->
         ValueError,
         match="snapshot samples_seen must be at least the sliding window length",
     ):
+        readout.restore(bad_snapshot)
+
+
+def test_sliding_ridge_restore_rejects_negative_solve_count() -> None:
+    readout = SlidingWindowRidgeReadout(feature_dim=1)
+    snapshot = readout.snapshot()
+    bad_snapshot = replace(snapshot, state=_state(snapshot, solve_count=-1))
+
+    with pytest.raises(ValueError, match="solve_count must be non-negative"):
         readout.restore(bad_snapshot)
