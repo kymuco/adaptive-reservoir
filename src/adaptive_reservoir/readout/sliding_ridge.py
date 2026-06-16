@@ -116,7 +116,6 @@ class SlidingWindowRidgeReadout:
                 "weights": tuple(float(value) for value in self._weights),
                 "bias": self._bias,
                 "samples_seen": self._samples_seen,
-                "solve_count": self._solve_count,
                 "features_window": tuple(
                     tuple(float(value) for value in row)
                     for row in self._features_window
@@ -202,7 +201,6 @@ class SlidingWindowRidgeReadout:
         if samples_seen < 0:
             msg = "snapshot samples_seen must be non-negative"
             raise ValueError(msg)
-        solve_count = _optional_non_negative_int(state, "solve_count", default=0)
         features_window = _validate_features_window(
             state.get("features_window"),
             feature_dim=self.feature_dim,
@@ -222,7 +220,7 @@ class SlidingWindowRidgeReadout:
         self._weights = restored_weights
         self._bias = bias
         self._samples_seen = samples_seen
-        self._solve_count = solve_count
+        self._solve_count = 0
         self._features_window = features_window
         self._targets_window = targets_window
 
@@ -261,19 +259,6 @@ def _required_int(state: Mapping[str, object], key: str) -> int:
     value = state.get(key)
     if isinstance(value, bool) or not isinstance(value, int):
         msg = f"snapshot state.{key} must be an integer"
-        raise ValueError(msg)
-    return value
-
-
-def _optional_non_negative_int(
-    state: Mapping[str, object],
-    key: str,
-    *,
-    default: int,
-) -> int:
-    value = state.get(key, default)
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        msg = f"snapshot state.{key} must be a non-negative integer"
         raise ValueError(msg)
     return value
 
