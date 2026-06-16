@@ -154,7 +154,11 @@ class AdaptiveChannelCalculator:
         )
 
     def _validate_activations(self, state: ReservoirState) -> FloatArray:
-        return validate_features(state.activations, dtype=self.dtype)
+        activations = validate_features(state.activations, dtype=self.dtype)
+        if self._activation_window and activations.size != self._activation_window[0].size:
+            msg = "state activations shape must remain stable"
+            raise ValueError(msg)
+        return activations
 
     def _calculate_novelty(
         self,
