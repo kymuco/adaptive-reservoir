@@ -12,6 +12,7 @@ import numpy as np
 from adaptive_reservoir.core.config import ReservoirConfig
 from adaptive_reservoir.core.protocols import FloatArray, TopologyBuilderProtocol
 from adaptive_reservoir.core.state import ReservoirState
+from adaptive_reservoir.core.validation import validate_input_vector
 from adaptive_reservoir.topology import (
     EdgeList,
     ModularSmallWorldTopologyBuilder,
@@ -72,7 +73,11 @@ class ReservoirCore:
     def step(self, x: Sequence[float]) -> ReservoirState:
         """Advance reservoir state by one input vector."""
 
-        input_vector = _validate_input_vector(x, input_dim=self.config.input_dim)
+        input_vector = validate_input_vector(
+            x,
+            input_dim=self.config.input_dim,
+            dtype=self.config.dtype,
+        )
         input_vector = input_vector.astype(self.input_weights.dtype, copy=False)
         previous = self.state.activations
         input_drive = self.input_weights @ input_vector
@@ -185,17 +190,6 @@ def _update_trace(old_trace: FloatArray, state: FloatArray, decay: float) -> Flo
         state.dtype,
         copy=False,
     )
-
-
-def _validate_input_vector(x: Sequence[float], *, input_dim: int) -> FloatArray:
-    values = np.asarray(tuple(float(value) for value in x), dtype=np.float64)
-    if values.shape != (input_dim,):
-        msg = f"expected input_dim={input_dim}, got {values.size}"
-        raise ValueError(msg)
-    if not np.all(np.isfinite(values)):
-        msg = "all input values must be finite"
-        raise ValueError(msg)
-    return values
 
 
 def _derive_seed(seed: int, label: str) -> int:
