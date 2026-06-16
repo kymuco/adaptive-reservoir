@@ -1,4 +1,4 @@
-"""Stateful base calculator for adaptive state channels."""
+"""Stateful calculator for adaptive state channels."""
 
 from __future__ import annotations
 
@@ -11,9 +11,11 @@ from adaptive_reservoir.core.result import AdaptiveChannels
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.readout.base import FloatArray, validate_features, validate_target
 
+_NOVELTY_BASELINE_MULTIPLIER = 3.0
+
 
 class AdaptiveChannelCalculator:
-    """Stateful base for bounded numeric adaptive channel signals."""
+    """Stateful calculator for bounded numeric adaptive channel signals."""
 
     def __init__(self, *, config: ChannelConfig, dtype: str = "float64") -> None:
         if not isinstance(config, ChannelConfig):
@@ -24,6 +26,7 @@ class AdaptiveChannelCalculator:
         self._samples_seen = 0
         self._feature_dim: int | None = None
         self._feature_window: list[FloatArray] = []
+        self._activation_window: list[FloatArray] = []
         self._state_delta_window: list[float] = []
         self._prediction_window: list[float] = []
         self._prediction_error_window: list[float] = []
@@ -40,6 +43,12 @@ class AdaptiveChannelCalculator:
         """Number of feature vectors retained in the novelty history."""
 
         return len(self._feature_window)
+
+    @property
+    def state_count(self) -> int:
+        """Number of activation vectors retained in the novelty history."""
+
+        return len(self._activation_window)
 
     @property
     def state_delta_count(self) -> int:
@@ -71,6 +80,7 @@ class AdaptiveChannelCalculator:
         self._samples_seen = 0
         self._feature_dim = None
         self._feature_window.clear()
+        self._activation_window.clear()
         self._state_delta_window.clear()
         self._prediction_window.clear()
         self._prediction_error_window.clear()
@@ -84,10 +94,10 @@ class AdaptiveChannelCalculator:
         prediction: object | None = None,
         target: object | None = None,
     ) -> AdaptiveChannels:
-        """Update numeric channel histories and return safe default channels.
+        """Update numeric channel histories and return bounded channels.
 
         The raw ``input`` value is accepted to preserve the channel-calculator
-        contract, but it is intentionally not stored by this base calculator.
+        contract, but it is intentionally not stored by this calculator.
         Missing predictions are treated as unavailable bootstrapping signals.
         """
 
@@ -96,13 +106,19 @@ class AdaptiveChannelCalculator:
             msg = "state must be a ReservoirState"
             raise TypeError(msg)
         feature_vector = self._validate_features(features)
+        activations = self._validate_activations(state)
         prediction_value = None if prediction is None else _validate_prediction(prediction)
         target_value = None if target is None else validate_target(target)
-        state_delta = self._calculate_state_delta(state)
+        novelty = self._calculate_novelty(
+            features=feature_vector,
+            activations=activations,
+        )
+        state_delta = self._calculate_state_delta(activations)
 
         if self._feature_dim is None:
             self._feature_dim = int(feature_vector.size)
         self._append_feature(feature_vector)
+        self._append_activation(activations)
         _append_bounded(
             self._state_delta_window,
             state_delta,
@@ -123,7 +139,7 @@ class AdaptiveChannelCalculator:
         self._samples_seen += 1
 
         return _safe_channels(
-            novelty=0.0,
+            novelty=novelty,
             stability=1.0,
             drift_pressure=0.0,
             confidence=0.0,
@@ -137,22 +153,56 @@ class AdaptiveChannelCalculator:
             dtype=self.dtype,
         )
 
+    def _validate_activations(self, state: ReservoirState) -> FloatArray:
+        activations = validate_features(state.activations, dtype=self.dtype)
+        if self._activation_window and activations.size != self._activation_window[0].size:
+            msg = "state activations shape must remain stable"
+            raise ValueError(msg)
+        return activations
+
+    def _calculate_novelty(
+        self,
+        *,
+        features: FloatArray,
+        activations: FloatArray,
+    ) -> float:
+        feature_score = _distance_to_recent_mean_score(
+            features,
+            self._feature_window,
+            epsilon=self.config.epsilon,
+        )
+        state_score = _distance_to_recent_mean_score(
+            activations,
+            self._activation_window,
+            epsilon=self.config.epsilon,
+        )
+        return _clip01(max(feature_score, state_score))
+
     def _append_feature(self, features: FloatArray) -> None:
         self._feature_window.append(features)
         overflow = len(self._feature_window) - self.config.novelty_window
         if overflow > 0:
             del self._feature_window[:overflow]
 
-    def _calculate_state_delta(self, state: ReservoirState) -> float:
-        activations = validate_features(state.activations, dtype=self.dtype)
+    def _append_activation(self, activations: FloatArray) -> None:
+        stored = np.array(activations, dtype=self.dtype, copy=True)
+        stored.setflags(write=False)
+        self._activation_window.append(stored)
+        overflow = len(self._activation_window) - self.config.novelty_window
+        if overflow > 0:
+            del self._activation_window[:overflow]
+
+    def _calculate_state_delta(self, activations: FloatArray) -> float:
         if self._previous_activations is None:
             state_delta = 0.0
         else:
             if activations.size != self._previous_activations.size:
                 msg = "state activations shape must remain stable"
                 raise ValueError(msg)
-            difference = activations - self._previous_activations
-            state_delta = float(np.sqrt(np.mean(difference * difference)))
+            difference = activations.astype(np.float64) - self._previous_activations.astype(
+                np.float64
+            )
+            state_delta = _rms_value(difference)
         self._previous_activations = np.array(activations, dtype=self.dtype, copy=True)
         self._previous_activations.setflags(write=False)
         return state_delta
@@ -183,6 +233,42 @@ def _validate_prediction(value: object) -> float:
         msg = "prediction must be finite"
         raise ValueError(msg)
     return prediction
+
+
+def _distance_to_recent_mean_score(
+    current: FloatArray,
+    history: list[FloatArray],
+    *,
+    epsilon: float,
+) -> float:
+    if not history:
+        return 0.0
+    matrix = np.vstack(history).astype(np.float64)
+    recent_mean = np.mean(matrix, axis=0)
+    distance = _rms_distance(current, recent_mean)
+    if distance <= epsilon:
+        return 0.0
+    history_distances = np.asarray(
+        [_rms_distance(row, recent_mean) for row in matrix],
+        dtype=np.float64,
+    )
+    baseline = float(np.mean(history_distances))
+    denominator = distance + _NOVELTY_BASELINE_MULTIPLIER * baseline + epsilon
+    return _clip01(distance / denominator)
+
+
+def _rms_distance(left: FloatArray, right: FloatArray) -> float:
+    difference = np.asarray(left, dtype=np.float64) - np.asarray(right, dtype=np.float64)
+    return _rms_value(difference)
+
+
+def _rms_value(values: FloatArray) -> float:
+    magnitudes = np.abs(np.asarray(values, dtype=np.float64))
+    scale = float(np.max(magnitudes)) if magnitudes.size > 0 else 0.0
+    if scale == 0.0:
+        return 0.0
+    normalized = magnitudes / scale
+    return float(scale * np.sqrt(np.mean(normalized * normalized)))
 
 
 def _append_bounded(values: list[float], value: float, *, max_len: int) -> None:
