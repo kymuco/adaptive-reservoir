@@ -199,8 +199,10 @@ class AdaptiveChannelCalculator:
             if activations.size != self._previous_activations.size:
                 msg = "state activations shape must remain stable"
                 raise ValueError(msg)
-            difference = activations - self._previous_activations
-            state_delta = float(np.sqrt(np.mean(difference * difference)))
+            difference = activations.astype(np.float64) - self._previous_activations.astype(
+                np.float64
+            )
+            state_delta = _rms_value(difference)
         self._previous_activations = np.array(activations, dtype=self.dtype, copy=True)
         self._previous_activations.setflags(write=False)
         return state_delta
@@ -241,9 +243,11 @@ def _distance_to_recent_mean_score(
 ) -> float:
     if not history:
         return 0.0
-    matrix = np.vstack(history)
+    matrix = np.vstack(history).astype(np.float64)
     recent_mean = np.mean(matrix, axis=0)
     distance = _rms_distance(current, recent_mean)
+    if distance <= epsilon:
+        return 0.0
     history_distances = np.asarray(
         [_rms_distance(row, recent_mean) for row in matrix],
         dtype=np.float64,
@@ -254,8 +258,17 @@ def _distance_to_recent_mean_score(
 
 
 def _rms_distance(left: FloatArray, right: FloatArray) -> float:
-    difference = left - right
-    return float(np.sqrt(np.mean(difference * difference)))
+    difference = np.asarray(left, dtype=np.float64) - np.asarray(right, dtype=np.float64)
+    return _rms_value(difference)
+
+
+def _rms_value(values: FloatArray) -> float:
+    magnitudes = np.abs(np.asarray(values, dtype=np.float64))
+    scale = float(np.max(magnitudes)) if magnitudes.size > 0 else 0.0
+    if scale == 0.0:
+        return 0.0
+    normalized = magnitudes / scale
+    return float(scale * np.sqrt(np.mean(normalized * normalized)))
 
 
 def _append_bounded(values: list[float], value: float, *, max_len: int) -> None:
