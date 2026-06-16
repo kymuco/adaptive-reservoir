@@ -62,6 +62,22 @@ def test_metrics_snapshot_reports_sliding_ridge_solve_count() -> None:
     assert second.readout_solve_count == 1
 
 
+def test_metrics_snapshot_reports_replay_ridge_solve_count() -> None:
+    model = AdaptiveReservoir(
+        _config(readout=ReadoutConfig(name="replay_ridge", update_interval=2))
+    )
+
+    model.step([0.1, -0.1], target=1.0)
+    first = model.metrics_snapshot()
+    model.step([0.2, -0.2], target=1.0)
+    second = model.metrics_snapshot()
+
+    assert first.readout_update_count == 1
+    assert first.readout_solve_count == 0
+    assert second.readout_update_count == 2
+    assert second.readout_solve_count == 1
+
+
 def test_metrics_snapshot_does_not_change_after_predict() -> None:
     model = AdaptiveReservoir(_config())
     model.step([0.1, -0.1], target=1.0)
