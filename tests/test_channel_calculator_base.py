@@ -30,6 +30,57 @@ def test_channel_calculator_returns_default_finite_channels() -> None:
     assert _channels_are_finite_and_bounded(channels)
 
 
+def test_channel_calculator_target_defaults_to_none() -> None:
+    calculator = AdaptiveChannelCalculator(config=ChannelConfig())
+
+    channels = calculator.update(
+        input=[1.0, 2.0],
+        state=ReservoirState.zeros(n_cells=2),
+        features=[0.1, 0.2],
+        prediction=0.0,
+    )
+
+    assert _channels_are_finite_and_bounded(channels)
+    assert calculator.samples_seen == 1
+    assert calculator.prediction_count == 1
+    assert calculator.prediction_error_count == 0
+
+
+def test_channel_calculator_allows_missing_prediction() -> None:
+    calculator = AdaptiveChannelCalculator(config=ChannelConfig())
+
+    channels = calculator.update(
+        input=[1.0, 2.0],
+        state=ReservoirState.zeros(n_cells=2),
+        features=[0.1, 0.2],
+        prediction=None,
+        target=1.0,
+    )
+
+    assert _channels_are_finite_and_bounded(channels)
+    assert calculator.samples_seen == 1
+    assert calculator.feature_count == 1
+    assert calculator.state_delta_count == 1
+    assert calculator.prediction_count == 0
+    assert calculator.prediction_error_count == 0
+
+
+def test_channel_calculator_prediction_defaults_to_none() -> None:
+    calculator = AdaptiveChannelCalculator(config=ChannelConfig())
+
+    channels = calculator.update(
+        input=[1.0, 2.0],
+        state=ReservoirState.zeros(n_cells=2),
+        features=[0.1, 0.2],
+    )
+
+    assert _channels_are_finite_and_bounded(channels)
+    assert calculator.samples_seen == 1
+    assert calculator.feature_count == 1
+    assert calculator.prediction_count == 0
+    assert calculator.prediction_error_count == 0
+
+
 def test_channel_calculator_increments_samples_seen() -> None:
     calculator = AdaptiveChannelCalculator(config=ChannelConfig())
     state = ReservoirState.zeros(n_cells=2)
