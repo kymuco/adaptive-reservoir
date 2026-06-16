@@ -110,6 +110,31 @@ def test_stability_works_without_prediction() -> None:
     assert calculator.prediction_count == 0
 
 
+def test_stability_ignores_stale_prediction_history_when_prediction_is_missing() -> None:
+    calculator = AdaptiveChannelCalculator(config=ChannelConfig(stability_window=6))
+
+    for prediction in [10.0, -10.0, 10.0, -10.0, 10.0, -10.0]:
+        volatile_channels = calculator.update(
+            input=[0.0],
+            state=_state([0.0, 0.0]),
+            features=[0.0, 0.0],
+            prediction=prediction,
+        )
+
+    assert volatile_channels.stability < 1.0
+    for _ in range(4):
+        no_prediction_channels = calculator.update(
+            input=[0.0],
+            state=_state([0.0, 0.0]),
+            features=[0.0, 0.0],
+            prediction=None,
+        )
+
+    assert no_prediction_channels.stability == pytest.approx(1.0)
+    assert calculator.prediction_count == 6
+    assert _channels_are_finite_and_bounded(no_prediction_channels)
+
+
 def test_stability_uses_bounded_state_and_prediction_histories() -> None:
     calculator = AdaptiveChannelCalculator(config=ChannelConfig(stability_window=3))
 
@@ -140,6 +165,43 @@ def test_stability_handles_large_values_without_overflow() -> None:
             prediction=value,
         )
 
+    assert _channels_are_finite_and_bounded(channels)
+
+
+def test_stability_handles_large_float64_prediction_mean_without_overflow() -> None:
+    calculator = AdaptiveChannelCalculator(config=ChannelConfig(stability_window=4))
+    large = 1e308
+
+    calculator.update(
+        input=[0.0],
+        state=_state([0.0, 0.0]),
+        features=[0.0, 0.0],
+        prediction=large,
+    )
+    channels = calculator.update(
+        input=[0.0],
+        state=_state([0.0, 0.0]),
+        features=[0.0, 0.0],
+        prediction=large,
+    )
+
+    assert channels.stability == pytest.approx(1.0)
+    assert _channels_are_finite_and_bounded(channels)
+
+
+def test_stability_handles_alternating_large_float64_predictions() -> None:
+    calculator = AdaptiveChannelCalculator(config=ChannelConfig(stability_window=4))
+    large = 1e308
+
+    for prediction in [large, -large, large, -large]:
+        channels = calculator.update(
+            input=[0.0],
+            state=_state([0.0, 0.0]),
+            features=[0.0, 0.0],
+            prediction=prediction,
+        )
+
+    assert channels.stability < 1.0
     assert _channels_are_finite_and_bounded(channels)
 
 
