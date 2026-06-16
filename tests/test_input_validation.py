@@ -77,6 +77,7 @@ def test_predict_rejects_wrong_input_dim(x: object) -> None:
         [[1.0, 2.0]],
         np.array([[1.0, 2.0]]),
         1.0,
+        None,
         "1,2",
         b"1,2",
     ],
@@ -103,6 +104,15 @@ def test_predict_rejects_non_1d_input(x: object) -> None:
 
     with pytest.raises(ValueError, match="x must be a 1D numeric vector"):
         model.predict(x)  # type: ignore[arg-type]
+
+
+def test_predict_none_uses_current_state_prediction() -> None:
+    model = AdaptiveReservoir(_config())
+
+    prediction = model.predict(None)
+
+    assert isinstance(prediction, float)
+    assert model.samples_seen == 0
 
 
 @pytest.mark.parametrize(
@@ -140,7 +150,6 @@ def test_predict_rejects_non_finite_input_values(x: object) -> None:
     [
         [1.0, "bad"],
         [object(), 1.0],
-        None,
     ],
 )
 def test_step_rejects_non_numeric_input_values(x: object) -> None:
@@ -155,7 +164,6 @@ def test_step_rejects_non_numeric_input_values(x: object) -> None:
     [
         [1.0, "bad"],
         [object(), 1.0],
-        None,
     ],
 )
 def test_predict_rejects_non_numeric_input_values(x: object) -> None:
@@ -196,6 +204,7 @@ def test_step_rejects_non_finite_target(target: object) -> None:
         "1.0",
         b"1.0",
         True,
+        np.bool_(True),
         object(),
     ],
 )
