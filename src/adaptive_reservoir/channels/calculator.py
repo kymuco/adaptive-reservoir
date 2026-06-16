@@ -81,13 +81,14 @@ class AdaptiveChannelCalculator:
         input: object,
         state: ReservoirState,
         features: object,
-        prediction: object,
-        target: object | None,
+        prediction: object | None = None,
+        target: object | None = None,
     ) -> AdaptiveChannels:
         """Update numeric channel histories and return safe default channels.
 
         The raw ``input`` value is accepted to preserve the channel-calculator
         contract, but it is intentionally not stored by this base calculator.
+        Missing predictions are treated as unavailable bootstrapping signals.
         """
 
         del input
@@ -95,7 +96,7 @@ class AdaptiveChannelCalculator:
             msg = "state must be a ReservoirState"
             raise TypeError(msg)
         feature_vector = self._validate_features(features)
-        prediction_value = _validate_prediction(prediction)
+        prediction_value = None if prediction is None else _validate_prediction(prediction)
         target_value = None if target is None else validate_target(target)
         state_delta = self._calculate_state_delta(state)
 
@@ -107,12 +108,13 @@ class AdaptiveChannelCalculator:
             state_delta,
             max_len=self.config.stability_window,
         )
-        _append_bounded(
-            self._prediction_window,
-            prediction_value,
-            max_len=self.config.stability_window,
-        )
-        if target_value is not None:
+        if prediction_value is not None:
+            _append_bounded(
+                self._prediction_window,
+                prediction_value,
+                max_len=self.config.stability_window,
+            )
+        if target_value is not None and prediction_value is not None:
             _append_bounded(
                 self._prediction_error_window,
                 abs(target_value - prediction_value),
