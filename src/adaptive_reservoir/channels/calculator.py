@@ -153,6 +153,7 @@ class AdaptiveChannelCalculator:
             stability=stability,
             supervised_available=prediction_error is not None,
         )
+        confidence = _prediction_confidence(prediction_value)
 
         if self._feature_dim is None:
             self._feature_dim = int(feature_vector.size)
@@ -181,7 +182,7 @@ class AdaptiveChannelCalculator:
             novelty=novelty,
             stability=stability,
             drift_pressure=drift_pressure,
-            confidence=0.0,
+            confidence=confidence,
             saturation=0.0,
         )
 
@@ -309,6 +310,12 @@ def _validate_prediction(value: object) -> float:
         msg = "prediction must be finite"
         raise ValueError(msg)
     return prediction
+
+
+def _prediction_confidence(prediction: float | None) -> float:
+    if prediction is None:
+        return 0.0
+    return _clip01(abs(prediction))
 
 
 def _distance_to_recent_mean_score(
