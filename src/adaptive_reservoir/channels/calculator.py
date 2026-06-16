@@ -12,6 +12,7 @@ from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.readout.base import FloatArray, validate_features, validate_target
 
 _NOVELTY_BASELINE_MULTIPLIER = 3.0
+_MAX_FLOAT64 = float(np.finfo(np.float64).max)
 
 
 class AdaptiveChannelCalculator:
@@ -132,6 +133,26 @@ class AdaptiveChannelCalculator:
             state_delta_values=state_delta_values,
             prediction_values=prediction_values,
         )
+        prediction_error = (
+            _safe_abs_difference(target_value, prediction_value)
+            if target_value is not None and prediction_value is not None
+            else None
+        )
+        prediction_error_values = (
+            _bounded_with_candidate(
+                self._prediction_error_window,
+                prediction_error,
+                max_len=self.config.drift_window,
+            )
+            if prediction_error is not None
+            else []
+        )
+        drift_pressure = self._calculate_drift_pressure(
+            prediction_error_values=prediction_error_values,
+            novelty=novelty,
+            stability=stability,
+            supervised_available=prediction_error is not None,
+        )
 
         if self._feature_dim is None:
             self._feature_dim = int(feature_vector.size)
@@ -148,10 +169,10 @@ class AdaptiveChannelCalculator:
                 prediction_value,
                 max_len=self.config.stability_window,
             )
-        if target_value is not None and prediction_value is not None:
+        if prediction_error is not None:
             _append_bounded(
                 self._prediction_error_window,
-                abs(target_value - prediction_value),
+                prediction_error,
                 max_len=self.config.drift_window,
             )
         self._samples_seen += 1
@@ -159,7 +180,7 @@ class AdaptiveChannelCalculator:
         return _safe_channels(
             novelty=novelty,
             stability=stability,
-            drift_pressure=0.0,
+            drift_pressure=drift_pressure,
             confidence=0.0,
             saturation=0.0,
         )
@@ -217,6 +238,21 @@ class AdaptiveChannelCalculator:
             )
         instability = float(np.mean(components)) if components else 0.0
         return _clip01(1.0 - instability)
+
+    def _calculate_drift_pressure(
+        self,
+        *,
+        prediction_error_values: list[float],
+        novelty: float,
+        stability: float,
+        supervised_available: bool,
+    ) -> float:
+        if supervised_available:
+            return _error_trend_pressure(
+                prediction_error_values,
+                epsilon=self.config.epsilon,
+            )
+        return _unsupervised_drift_proxy(novelty=novelty, stability=stability)
 
     def _append_feature(self, features: FloatArray) -> None:
         self._feature_window.append(features)
@@ -313,6 +349,41 @@ def _volatility_instability(values: list[float], *, epsilon: float) -> float:
         return 0.0
     magnitude = float(np.mean(np.abs(normalized)))
     return _clip01(volatility / (volatility + magnitude + normalized_epsilon))
+
+
+def _error_trend_pressure(values: list[float], *, epsilon: float) -> float:
+    if len(values) < 2:
+        return 0.0
+    vector = np.asarray(values, dtype=np.float64)
+    scale = _max_abs(vector)
+    if scale == 0.0:
+        return 0.0
+    normalized = vector / scale
+    midpoint = len(normalized) // 2
+    older = normalized[:midpoint]
+    newer = normalized[midpoint:]
+    older_mean = float(np.mean(older))
+    newer_mean = float(np.mean(newer))
+    increase = max(0.0, newer_mean - older_mean)
+    normalized_epsilon = epsilon / scale
+    denominator = abs(older_mean) + abs(newer_mean) + normalized_epsilon
+    return _clip01(increase / denominator)
+
+
+def _unsupervised_drift_proxy(*, novelty: float, stability: float) -> float:
+    return _clip01(0.5 * _clip01(novelty) + 0.5 * (1.0 - _clip01(stability)))
+
+
+def _safe_abs_difference(left: float, right: float) -> float:
+    left_value = _finite_float(left)
+    right_value = _finite_float(right)
+    scale = max(abs(left_value), abs(right_value))
+    if scale == 0.0:
+        return 0.0
+    normalized_difference = abs((left_value / scale) - (right_value / scale))
+    if normalized_difference > _MAX_FLOAT64 / scale:
+        return _MAX_FLOAT64
+    return scale * normalized_difference
 
 
 def _max_abs(values: FloatArray) -> float:
