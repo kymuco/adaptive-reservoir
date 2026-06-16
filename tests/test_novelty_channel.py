@@ -144,6 +144,30 @@ def test_novelty_channel_is_always_finite_and_bounded() -> None:
         assert _channels_are_finite_and_bounded(channels)
 
 
+def test_novelty_handles_large_float32_values_without_overflow() -> None:
+    calculator = AdaptiveChannelCalculator(
+        config=ChannelConfig(novelty_window=4),
+        dtype="float32",
+    )
+    large = 1e20
+
+    calculator.update(
+        input=[0.0],
+        state=_state([large, large], dtype=np.float32),
+        features=np.asarray([large, large], dtype=np.float32),
+        prediction=None,
+    )
+    channels = calculator.update(
+        input=[0.0],
+        state=_state([-large, large], dtype=np.float32),
+        features=np.asarray([-large, large], dtype=np.float32),
+        prediction=None,
+    )
+
+    assert _channels_are_finite_and_bounded(channels)
+    assert channels.novelty > 0.8
+
+
 def test_novelty_does_not_require_prediction_or_target() -> None:
     calculator = AdaptiveChannelCalculator(config=ChannelConfig(novelty_window=4))
 
@@ -184,8 +208,8 @@ def test_novelty_uses_previous_history_before_appending_current_sample() -> None
     assert second.novelty > 0.8
 
 
-def _state(values: list[float]) -> ReservoirState:
-    activations = np.asarray(values, dtype=np.float64)
+def _state(values: list[float], *, dtype: np.dtype | type = np.float64) -> ReservoirState:
+    activations = np.asarray(values, dtype=dtype)
     return ReservoirState(
         activations=activations,
         fast_trace=np.zeros_like(activations),
