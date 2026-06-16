@@ -4,6 +4,7 @@ import pytest
 from adaptive_reservoir import (
     AdaptiveChannels,
     AdaptiveReservoir,
+    ChannelCalculatorSnapshot,
     ReadoutConfig,
     ReservoirConfig,
     ReservoirSnapshot,
@@ -144,10 +145,12 @@ def test_adaptive_reservoir_snapshot_returns_numeric_state_only() -> None:
     snapshot = model.snapshot()
 
     assert isinstance(snapshot, ReservoirSnapshot)
-    assert snapshot.schema_version == 2
+    assert snapshot.schema_version == 3
     assert isinstance(snapshot.state, ReservoirState)
     assert isinstance(snapshot.readout, ReadoutSnapshot)
+    assert isinstance(snapshot.channels, ChannelCalculatorSnapshot)
     assert snapshot.state.samples_seen == 1
+    assert snapshot.channels.samples_seen == 1
     assert snapshot.state.activations.shape == (4,)
 
 
