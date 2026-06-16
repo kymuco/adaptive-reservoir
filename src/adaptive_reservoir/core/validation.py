@@ -49,7 +49,7 @@ def validate_optional_target(target: object | None, *, name: str = "target") -> 
 
     if target is None:
         return None
-    if isinstance(target, (str, bytes, bool)):
+    if isinstance(target, (str, bytes, bool, np.bool_)):
         msg = f"{name} must be numeric"
         raise ValueError(msg)
     try:
