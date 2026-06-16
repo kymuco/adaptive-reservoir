@@ -8,6 +8,7 @@ from typing import Any
 __all__ = [
     "AdaptiveChannels",
     "AdaptiveReservoir",
+    "AdaptiveReservoirMetricsSnapshot",
     "AdaptiveStepResult",
     "ChannelCalculatorProtocol",
     "ChannelConfig",
@@ -32,6 +33,7 @@ __all__ = [
 _EXPORTS = {
     "AdaptiveChannels": "adaptive_reservoir.core.result",
     "AdaptiveReservoir": "adaptive_reservoir.core.adaptive_reservoir",
+    "AdaptiveReservoirMetricsSnapshot": "adaptive_reservoir.core.metrics",
     "AdaptiveStepResult": "adaptive_reservoir.core.result",
     "ChannelCalculatorProtocol": "adaptive_reservoir.core.protocols",
     "ChannelConfig": "adaptive_reservoir.core.config",
