@@ -32,7 +32,7 @@ class AdaptiveReservoirMetricsSnapshot:
 
 
 def _validate_schema_version(value: int) -> None:
-    if value != ADAPTIVE_RESERVOIR_METRICS_SCHEMA_VERSION:
+    if isinstance(value, bool) or value != ADAPTIVE_RESERVOIR_METRICS_SCHEMA_VERSION:
         msg = f"unsupported metrics schema_version: {value}"
         raise ValueError(msg)
 
@@ -44,6 +44,9 @@ def _validate_non_negative_int(name: str, value: int) -> None:
 
 
 def _validate_non_negative_float(name: str, value: float) -> None:
+    if isinstance(value, bool):
+        msg = f"{name} must be finite and non-negative"
+        raise ValueError(msg)
     result = float(value)
     if not math.isfinite(result) or result < 0.0:
         msg = f"{name} must be finite and non-negative"
@@ -51,6 +54,9 @@ def _validate_non_negative_float(name: str, value: float) -> None:
 
 
 def _validate_channel_average(name: str, value: float) -> None:
+    if isinstance(value, bool):
+        msg = f"{name} must be in the range [0.0, 1.0]"
+        raise ValueError(msg)
     result = float(value)
     if not math.isfinite(result) or result < 0.0 or result > 1.0:
         msg = f"{name} must be in the range [0.0, 1.0]"
