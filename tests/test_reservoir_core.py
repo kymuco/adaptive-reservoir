@@ -51,7 +51,7 @@ def test_reservoir_core_step_validates_input_dim() -> None:
 def test_reservoir_core_step_rejects_non_finite_input() -> None:
     core = ReservoirCore.from_config(_config())
 
-    with pytest.raises(ValueError, match="all input values must be finite"):
+    with pytest.raises(ValueError, match="x must contain only finite values"):
         core.step([1.0, float("nan")])
 
 
@@ -258,8 +258,8 @@ def _manual_core(
 
 def _manual_edges(*, n_nodes: int) -> EdgeList:
     return EdgeList(
+        sources=np.array([0], dtype=np.int64),
+        targets=np.array([1], dtype=np.int64),
+        weights=np.array([0.5], dtype=np.float64),
         n_nodes=n_nodes,
-        sources=np.array([0]),
-        targets=np.array([1]),
-        weights=np.array([0.5]),
     )
