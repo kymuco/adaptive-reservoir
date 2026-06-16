@@ -114,6 +114,7 @@ class AdaptiveChannelCalculator:
             features=feature_vector,
             activations=activations,
         )
+        saturation = self._calculate_saturation(activations)
         state_delta = self._calculate_state_delta(activations)
         state_delta_values = _bounded_with_candidate(
             self._state_delta_window,
@@ -183,7 +184,7 @@ class AdaptiveChannelCalculator:
             stability=stability,
             drift_pressure=drift_pressure,
             confidence=confidence,
-            saturation=0.0,
+            saturation=saturation,
         )
 
     def _validate_features(self, features: object) -> FloatArray:
@@ -255,6 +256,12 @@ class AdaptiveChannelCalculator:
             )
         return _unsupervised_drift_proxy(novelty=novelty, stability=stability)
 
+    def _calculate_saturation(self, activations: FloatArray) -> float:
+        return _saturation_fraction(
+            activations,
+            threshold=self.config.saturation_threshold,
+        )
+
     def _append_feature(self, features: FloatArray) -> None:
         self._feature_window.append(features)
         overflow = len(self._feature_window) - self.config.novelty_window
@@ -316,6 +323,13 @@ def _prediction_confidence(prediction: float | None) -> float:
     if prediction is None:
         return 0.0
     return _clip01(abs(prediction))
+
+
+def _saturation_fraction(activations: FloatArray, *, threshold: float) -> float:
+    values = np.asarray(activations, dtype=np.float64)
+    if values.size == 0:
+        return 0.0
+    return _clip01(float(np.mean(np.abs(values) > threshold)))
 
 
 def _distance_to_recent_mean_score(
