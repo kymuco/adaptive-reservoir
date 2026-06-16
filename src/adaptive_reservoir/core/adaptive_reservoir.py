@@ -117,7 +117,7 @@ class AdaptiveReservoir:
                 samples_seen,
             ),
             readout_update_count=self._readout_update_count,
-            readout_solve_count=_readout_solve_count(self._readout),
+            readout_solve_count=self._readout_solve_count_total,
             saturation_rate_avg=_average_or_zero(
                 self._saturation_rate_total,
                 samples_seen,
@@ -168,9 +168,6 @@ class AdaptiveReservoir:
         new_core.state = clone_reservoir_state(state)
         new_readout = self._create_readout()
         new_readout.restore(snapshot.readout)
-        if _readout_solve_count(new_readout) != metrics.readout_solve_count:
-            msg = "snapshot metrics readout_solve_count must match readout state"
-            raise ValueError(msg)
         new_channels = self._create_channel_calculator()
         new_channels.restore(snapshot.channels)
         step_time_total_us = metrics.us_per_sample_avg * metrics.samples_seen
@@ -180,6 +177,8 @@ class AdaptiveReservoir:
         self._channels = new_channels
         self._step_time_total_us = step_time_total_us
         self._readout_update_count = metrics.readout_update_count
+        self._readout_solve_count_total = metrics.readout_solve_count
+        self._readout_solve_count_observed = _readout_solve_count(new_readout)
         self._saturation_rate_total = saturation_rate_total
 
     def _create_readout(self) -> ReadoutProtocol:
@@ -199,6 +198,8 @@ class AdaptiveReservoir:
     def _reset_metrics_state(self) -> None:
         self._step_time_total_us = 0.0
         self._readout_update_count = 0
+        self._readout_solve_count_total = 0
+        self._readout_solve_count_observed = _readout_solve_count(self._readout)
         self._saturation_rate_total = 0.0
 
     def _record_step_metrics(self, metrics: StepMetrics) -> None:
@@ -206,6 +207,11 @@ class AdaptiveReservoir:
             self._step_time_total_us += metrics.us_per_sample
         if metrics.readout_updated:
             self._readout_update_count += 1
+        current_solve_count = _readout_solve_count(self._readout)
+        solve_delta = current_solve_count - self._readout_solve_count_observed
+        if solve_delta > 0:
+            self._readout_solve_count_total += solve_delta
+        self._readout_solve_count_observed = current_solve_count
         if metrics.saturation_rate is not None:
             self._saturation_rate_total += metrics.saturation_rate
 
