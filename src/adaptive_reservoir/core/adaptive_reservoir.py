@@ -9,6 +9,7 @@ import numpy as np
 
 from adaptive_reservoir.channels.calculator import AdaptiveChannelCalculator
 from adaptive_reservoir.core.config import ReservoirConfig
+from adaptive_reservoir.core.metrics import AdaptiveReservoirMetricsSnapshot
 from adaptive_reservoir.core.reservoir import ReservoirCore
 from adaptive_reservoir.core.result import AdaptiveStepResult, StepMetrics
 from adaptive_reservoir.core.snapshot import (
@@ -32,6 +33,7 @@ class AdaptiveReservoir:
         self._core = ReservoirCore.from_config(config)
         self._readout = self._create_readout()
         self._channels = self._create_channel_calculator()
+        self._reset_metrics_state()
 
     @property
     def samples_seen(self) -> int:
@@ -69,7 +71,7 @@ class AdaptiveReservoir:
         )
         features = tuple(float(value) for value in features_array)
         elapsed_us = (time.perf_counter() - start) * 1_000_000.0
-        return AdaptiveStepResult(
+        result = AdaptiveStepResult(
             prediction=prediction,
             features=features,
             channels=channels,
@@ -88,6 +90,8 @@ class AdaptiveReservoir:
             ),
             state=state,
         )
+        self._record_step_metrics(result.metrics)
+        return result
 
     def predict(self, x: Sequence[float] | None = None) -> float:
         """Return a readout prediction without mutating runtime state."""
@@ -102,12 +106,31 @@ class AdaptiveReservoir:
         features = extract_features(temp_state, self.config.feature_mode)
         return self._readout.predict(features)
 
+    def metrics_snapshot(self) -> AdaptiveReservoirMetricsSnapshot:
+        """Return aggregate runtime metrics without mutating model state."""
+
+        samples_seen = self.samples_seen
+        return AdaptiveReservoirMetricsSnapshot(
+            samples_seen=samples_seen,
+            us_per_sample_avg=_average_or_zero(
+                self._step_time_total_us,
+                samples_seen,
+            ),
+            readout_update_count=self._readout_update_count,
+            readout_solve_count=_readout_solve_count(self._readout),
+            saturation_rate_avg=_average_or_zero(
+                self._saturation_rate_total,
+                samples_seen,
+            ),
+        )
+
     def reset(self) -> None:
-        """Reset runtime counters, reservoir state, readout state, and channels."""
+        """Reset runtime counters, reservoir state, readout state, channels, and metrics."""
 
         self._core = ReservoirCore.from_config(self.config)
         self._readout = self._create_readout()
         self._channels = self._create_channel_calculator()
+        self._reset_metrics_state()
 
     def snapshot(self) -> ReservoirSnapshot:
         """Return an immutable checkpoint of the current numeric state."""
@@ -116,11 +139,12 @@ class AdaptiveReservoir:
             state=clone_reservoir_state(self._core.state),
             readout=self._readout.snapshot(),
             channels=self._channels.snapshot(),
+            metrics=self.metrics_snapshot(),
             schema_version=SNAPSHOT_SCHEMA_VERSION,
         )
 
     def restore(self, snapshot: ReservoirSnapshot) -> None:
-        """Restore the reservoir, readout, and channel runtime state."""
+        """Restore the reservoir, readout, channel, and metrics runtime state."""
 
         if not isinstance(snapshot, ReservoirSnapshot):
             msg = "snapshot must be a ReservoirSnapshot"
@@ -133,15 +157,30 @@ class AdaptiveReservoir:
             msg = "snapshot.state must be a ReservoirState"
             raise TypeError(msg)
         self._validate_snapshot_state(state)
+        metrics = snapshot.metrics
+        if not isinstance(metrics, AdaptiveReservoirMetricsSnapshot):
+            msg = "snapshot.metrics must be an AdaptiveReservoirMetricsSnapshot"
+            raise TypeError(msg)
+        if metrics.samples_seen != state.samples_seen:
+            msg = "snapshot metrics samples_seen must match snapshot state samples_seen"
+            raise ValueError(msg)
         new_core = ReservoirCore.from_config(self.config)
         new_core.state = clone_reservoir_state(state)
         new_readout = self._create_readout()
         new_readout.restore(snapshot.readout)
+        if _readout_solve_count(new_readout) != metrics.readout_solve_count:
+            msg = "snapshot metrics readout_solve_count must match readout state"
+            raise ValueError(msg)
         new_channels = self._create_channel_calculator()
         new_channels.restore(snapshot.channels)
+        step_time_total_us = metrics.us_per_sample_avg * metrics.samples_seen
+        saturation_rate_total = metrics.saturation_rate_avg * metrics.samples_seen
         self._core = new_core
         self._readout = new_readout
         self._channels = new_channels
+        self._step_time_total_us = step_time_total_us
+        self._readout_update_count = metrics.readout_update_count
+        self._saturation_rate_total = saturation_rate_total
 
     def _create_readout(self) -> ReadoutProtocol:
         features = extract_features(self._core.state, self.config.feature_mode)
@@ -156,6 +195,19 @@ class AdaptiveReservoir:
             config=self.config.channels,
             dtype=self.config.dtype,
         )
+
+    def _reset_metrics_state(self) -> None:
+        self._step_time_total_us = 0.0
+        self._readout_update_count = 0
+        self._saturation_rate_total = 0.0
+
+    def _record_step_metrics(self, metrics: StepMetrics) -> None:
+        if metrics.us_per_sample is not None:
+            self._step_time_total_us += metrics.us_per_sample
+        if metrics.readout_updated:
+            self._readout_update_count += 1
+        if metrics.saturation_rate is not None:
+            self._saturation_rate_total += metrics.saturation_rate
 
     def _validate_snapshot_state(self, state: ReservoirState) -> None:
         """Validate snapshot compatibility with the current model configuration."""
@@ -179,3 +231,13 @@ class AdaptiveReservoir:
         if state.samples_seen < 0:
             msg = "snapshot state samples_seen must be non-negative"
             raise ValueError(msg)
+
+
+def _average_or_zero(total: float, count: int) -> float:
+    if count == 0:
+        return 0.0
+    return total / count
+
+
+def _readout_solve_count(readout: object) -> int:
+    return int(getattr(readout, "solve_count", 0))
