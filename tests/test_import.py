@@ -3,6 +3,7 @@ import pytest
 import adaptive_reservoir
 from adaptive_reservoir import (
     AdaptiveReservoir,
+    AdaptiveReservoirMetricsSnapshot,
     ReadoutSnapshot,
     ReservoirConfig,
     ReservoirSnapshot,
@@ -26,6 +27,8 @@ def test_package_imports() -> None:
     assert isinstance(diagnostics.trace_norms, TraceNorms)
     readout_snapshot = ReadoutSnapshot(schema_version=1, name="smoke", state={})
     assert readout_snapshot.name == "smoke"
+    metrics_snapshot = AdaptiveReservoirMetricsSnapshot(samples_seen=0)
+    assert metrics_snapshot.samples_seen == 0
 
 
 def test_public_api_processes_one_reservoir_step() -> None:
@@ -52,6 +55,7 @@ def test_public_api_processes_one_reservoir_step() -> None:
     assert isinstance(result.metrics.trace_norms, TraceNorms)
     assert isinstance(result.state, ReservoirState)
     assert model.samples_seen == 1
+    assert isinstance(model.metrics_snapshot(), AdaptiveReservoirMetricsSnapshot)
     assert isinstance(model.snapshot(), ReservoirSnapshot)
 
 
