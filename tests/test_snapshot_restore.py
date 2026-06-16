@@ -8,6 +8,7 @@ import pytest
 from adaptive_reservoir import (
     AdaptiveChannels,
     AdaptiveReservoir,
+    AdaptiveReservoirMetricsSnapshot,
     ChannelCalculatorSnapshot,
     ReadoutConfig,
     ReservoirConfig,
@@ -23,11 +24,13 @@ def test_snapshot_captures_numeric_runtime_state() -> None:
     result = model.step([0.5, -0.25])
     snapshot = model.snapshot()
 
-    assert snapshot.schema_version == 3
+    assert snapshot.schema_version == 4
     assert snapshot.state.samples_seen == result.metrics.samples_seen
     assert isinstance(snapshot.readout, ReadoutSnapshot)
     assert isinstance(snapshot.channels, ChannelCalculatorSnapshot)
+    assert isinstance(snapshot.metrics, AdaptiveReservoirMetricsSnapshot)
     assert snapshot.channels.samples_seen == result.metrics.samples_seen
+    assert snapshot.metrics.samples_seen == result.metrics.samples_seen
     np.testing.assert_allclose(snapshot.state.activations, result.state.activations)
     np.testing.assert_allclose(snapshot.state.fast_trace, result.state.fast_trace)
     np.testing.assert_allclose(snapshot.state.mid_trace, result.state.mid_trace)
@@ -42,6 +45,7 @@ def test_snapshot_is_independent_from_future_model_steps() -> None:
     captured_state = snapshot.state
     captured_readout = snapshot.readout
     captured_channels = snapshot.channels
+    captured_metrics = snapshot.metrics
 
     model.step([0.25, 0.75], target=-1.0)
     model.step([-1.0, 0.5], target=0.25)
@@ -53,6 +57,7 @@ def test_snapshot_is_independent_from_future_model_steps() -> None:
     assert snapshot.state.samples_seen == captured_state.samples_seen
     assert snapshot.readout == captured_readout
     assert snapshot.channels == captured_channels
+    assert snapshot.metrics == captured_metrics
 
 
 def test_restore_rewinds_model_state_and_continuation_is_deterministic() -> None:
@@ -94,6 +99,19 @@ def test_restore_recovers_readout_prediction() -> None:
     assert actual == pytest.approx(expected)
 
 
+def test_restore_preserves_metrics_snapshot() -> None:
+    config = _config()
+    model = AdaptiveReservoir(config)
+    model.step([0.5, -0.25], target=1.0)
+    model.step([0.25, 0.75])
+    snapshot = model.snapshot()
+
+    restored = AdaptiveReservoir(config)
+    restored.restore(snapshot)
+
+    assert restored.metrics_snapshot() == model.metrics_snapshot()
+
+
 def test_reset_matches_fresh_model_behavior() -> None:
     config = _config()
     model = AdaptiveReservoir(config)
@@ -119,7 +137,7 @@ def test_restore_rejects_wrong_snapshot_type() -> None:
     model = AdaptiveReservoir(_config())
 
     with pytest.raises(TypeError, match="ReservoirSnapshot"):
-        model.restore({"schema_version": 3, "state": None})  # type: ignore[arg-type]
+        model.restore({"schema_version": 4, "state": None})  # type: ignore[arg-type]
 
 
 def test_restore_rejects_bad_state_shape() -> None:
@@ -133,6 +151,7 @@ def test_restore_rejects_bad_state_shape() -> None:
         ),
         readout=_readout_snapshot(),
         channels=_channel_snapshot(),
+        metrics=_metrics_snapshot(),
     )
 
     with pytest.raises(ValueError, match="shape"):
@@ -150,6 +169,7 @@ def test_restore_rejects_bad_state_dtype() -> None:
         ),
         readout=_readout_snapshot(),
         channels=_channel_snapshot(),
+        metrics=_metrics_snapshot(),
     )
 
     with pytest.raises(ValueError, match="dtype"):
@@ -167,6 +187,7 @@ def test_restore_rejects_bad_schema_version() -> None:
         ),
         readout=_readout_snapshot(),
         channels=_channel_snapshot(),
+        metrics=_metrics_snapshot(),
         schema_version=999,
     )
 
@@ -193,6 +214,28 @@ def test_restore_rejects_bad_channel_snapshot() -> None:
         model.restore(snapshot)
 
 
+def test_restore_rejects_bad_metrics_snapshot() -> None:
+    model = AdaptiveReservoir(_config())
+    snapshot = dataclasses.replace(
+        _valid_snapshot(),
+        metrics=dataclasses.replace(_metrics_snapshot(), schema_version=999),
+    )
+
+    with pytest.raises(ValueError, match="schema_version"):
+        model.restore(snapshot)
+
+
+def test_restore_rejects_metrics_samples_seen_mismatch() -> None:
+    model = AdaptiveReservoir(_config())
+    snapshot = dataclasses.replace(
+        _valid_snapshot(),
+        metrics=AdaptiveReservoirMetricsSnapshot(samples_seen=1),
+    )
+
+    with pytest.raises(ValueError, match="samples_seen must match"):
+        model.restore(snapshot)
+
+
 def test_restore_is_atomic_when_readout_restore_fails() -> None:
     model = AdaptiveReservoir(_nlms_config())
     model.step([0.5, -0.25], target=1.0)
@@ -213,6 +256,7 @@ def test_restore_is_atomic_when_readout_restore_fails() -> None:
     assert after.state.samples_seen == current.state.samples_seen
     assert after.readout == current.readout
     assert after.channels == current.channels
+    assert after.metrics == current.metrics
 
 
 def test_restore_is_atomic_when_channel_restore_fails() -> None:
@@ -235,6 +279,30 @@ def test_restore_is_atomic_when_channel_restore_fails() -> None:
     assert after.state.samples_seen == current.state.samples_seen
     assert after.readout == current.readout
     assert after.channels == current.channels
+    assert after.metrics == current.metrics
+
+
+def test_restore_is_atomic_when_metrics_restore_fails() -> None:
+    model = AdaptiveReservoir(_config())
+    model.step([0.5, -0.25], target=1.0)
+    current = model.snapshot()
+    bad_snapshot = dataclasses.replace(
+        current,
+        metrics=AdaptiveReservoirMetricsSnapshot(samples_seen=0),
+    )
+
+    with pytest.raises(ValueError, match="samples_seen must match"):
+        model.restore(bad_snapshot)
+
+    after = model.snapshot()
+    np.testing.assert_allclose(after.state.activations, current.state.activations)
+    np.testing.assert_allclose(after.state.fast_trace, current.state.fast_trace)
+    np.testing.assert_allclose(after.state.mid_trace, current.state.mid_trace)
+    np.testing.assert_allclose(after.state.slow_trace, current.state.slow_trace)
+    assert after.state.samples_seen == current.state.samples_seen
+    assert after.readout == current.readout
+    assert after.channels == current.channels
+    assert after.metrics == current.metrics
 
 
 def test_snapshot_contains_no_semantic_or_domain_fields() -> None:
@@ -243,6 +311,7 @@ def test_snapshot_contains_no_semantic_or_domain_fields() -> None:
 
     assert {field.name for field in dataclasses.fields(snapshot)} == {
         "channels",
+        "metrics",
         "readout",
         "schema_version",
         "state",
@@ -258,12 +327,11 @@ def test_snapshot_contains_no_semantic_or_domain_fields() -> None:
         "conversation_data",
         "policy_decisions",
         "host_system_metadata",
-        "hde_data",
-        "config",
     }
     for name in forbidden_names:
         assert not hasattr(snapshot, name)
         assert not hasattr(snapshot.channels, name)
+        assert not hasattr(snapshot.metrics, name)
 
 
 def _config() -> ReservoirConfig:
@@ -305,6 +373,10 @@ def _readout_snapshot() -> ReadoutSnapshot:
 
 def _channel_snapshot() -> ChannelCalculatorSnapshot:
     return _valid_snapshot().channels
+
+
+def _metrics_snapshot() -> AdaptiveReservoirMetricsSnapshot:
+    return _valid_snapshot().metrics
 
 
 def _bad_readout_snapshot() -> ReadoutSnapshot:
