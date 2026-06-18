@@ -117,7 +117,12 @@ def rolling_regression_scores(
             scores.append(None)
             continue
         start = index + 1 - window
-        scores.append(regression_score(prediction_array[start : index + 1], target_array[start : index + 1]))
+        scores.append(
+            regression_score(
+                prediction_array[start : index + 1],
+                target_array[start : index + 1],
+            )
+        )
     return tuple(scores)
 
 
