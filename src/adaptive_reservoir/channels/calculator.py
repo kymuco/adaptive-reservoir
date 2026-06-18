@@ -9,6 +9,14 @@ import numpy as np
 
 from adaptive_reservoir.core.config import ChannelConfig
 from adaptive_reservoir.core.result import AdaptiveChannels
+from adaptive_reservoir.core.serialization import (
+    nested_numeric_sequence_to_tuple,
+    numeric_sequence_to_tuple,
+    optional_int_or_none,
+    optional_numeric_sequence_to_tuple,
+    require_int,
+    require_mapping,
+)
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.readout.base import FloatArray, validate_features, validate_target
 
@@ -30,6 +38,70 @@ class ChannelCalculatorSnapshot:
     prediction_error_window: tuple[float, ...]
     previous_activations: tuple[float, ...] | None
     schema_version: int = CHANNEL_CALCULATOR_SNAPSHOT_SCHEMA_VERSION
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-friendly channel snapshot dictionary."""
+
+        return {
+            "schema_version": self.schema_version,
+            "samples_seen": self.samples_seen,
+            "feature_dim": self.feature_dim,
+            "feature_window": [list(row) for row in self.feature_window],
+            "activation_window": [list(row) for row in self.activation_window],
+            "state_delta_window": list(self.state_delta_window),
+            "prediction_window": list(self.prediction_window),
+            "prediction_error_window": list(self.prediction_error_window),
+            "previous_activations": (
+                None
+                if self.previous_activations is None
+                else list(self.previous_activations)
+            ),
+        }
+
+    @classmethod
+    def from_dict(cls, data: object) -> ChannelCalculatorSnapshot:
+        """Create a channel snapshot from a JSON-friendly mapping."""
+
+        mapping = require_mapping(data, "channels")
+        schema_version = require_int(mapping, "schema_version")
+        if schema_version != CHANNEL_CALCULATOR_SNAPSHOT_SCHEMA_VERSION:
+            msg = f"unsupported channel snapshot schema_version: {schema_version}"
+            raise ValueError(msg)
+        if "feature_dim" not in mapping:
+            msg = "missing required field: feature_dim"
+            raise ValueError(msg)
+        if "previous_activations" not in mapping:
+            msg = "missing required field: previous_activations"
+            raise ValueError(msg)
+        return cls(
+            schema_version=schema_version,
+            samples_seen=require_int(mapping, "samples_seen"),
+            feature_dim=optional_int_or_none(mapping, "feature_dim", None),
+            feature_window=nested_numeric_sequence_to_tuple(
+                mapping.get("feature_window"),
+                "feature_window",
+            ),
+            activation_window=nested_numeric_sequence_to_tuple(
+                mapping.get("activation_window"),
+                "activation_window",
+            ),
+            state_delta_window=numeric_sequence_to_tuple(
+                mapping.get("state_delta_window"),
+                "state_delta_window",
+            ),
+            prediction_window=numeric_sequence_to_tuple(
+                mapping.get("prediction_window"),
+                "prediction_window",
+            ),
+            prediction_error_window=numeric_sequence_to_tuple(
+                mapping.get("prediction_error_window"),
+                "prediction_error_window",
+            ),
+            previous_activations=optional_numeric_sequence_to_tuple(
+                mapping.get("previous_activations"),
+                "previous_activations",
+            ),
+        )
 
 
 class AdaptiveChannelCalculator:
