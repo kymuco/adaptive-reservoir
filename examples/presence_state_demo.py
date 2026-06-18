@@ -125,7 +125,13 @@ def presence_targets(event: tuple[float, ...], *, phase: str) -> dict[str, float
 
     _validate_event(event)
     _validate_phase(phase)
-    idle_time, window_switch_rate, typing_burst, failed_action_count, notification_density = event
+    (
+        idle_time,
+        window_switch_rate,
+        typing_burst,
+        failed_action_count,
+        notification_density,
+    ) = event
     should_wait = _clip01(
         0.30 * typing_burst
         + 0.25 * window_switch_rate
