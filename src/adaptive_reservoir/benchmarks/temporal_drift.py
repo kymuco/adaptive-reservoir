@@ -191,7 +191,12 @@ def _generate_signal(*, seed: int, length: int) -> np.ndarray:
     return np.tanh(signal).astype(np.float64)
 
 
-def _sample_at(signal: np.ndarray, index: int, *, input_dim: int) -> tuple[float, ...]:
+def _sample_at(
+    signal: np.ndarray,
+    index: int,
+    *,
+    input_dim: int,
+) -> tuple[float, ...]:
     current = float(signal[index])
     previous = float(signal[index - 1])
     values = [current, current - previous]
