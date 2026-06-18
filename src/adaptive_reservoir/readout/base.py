@@ -73,10 +73,11 @@ class ReadoutSnapshot:
         """Create a readout snapshot from a JSON-friendly mapping."""
 
         mapping = require_mapping(data, "readout")
+        state = _freeze_snapshot_mapping(require_mapping(mapping.get("state"), "state"))
         return cls(
             schema_version=require_int(mapping, "schema_version"),
             name=require_str(mapping, "name"),
-            state=require_mapping(mapping.get("state"), "state"),
+            state=state,
         )
 
     def __post_init__(self) -> None:
