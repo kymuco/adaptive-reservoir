@@ -66,6 +66,20 @@ def test_build_config_from_args_respects_overrides() -> None:
     assert config.seed == 7
 
 
+def test_build_config_from_args_preserves_invalid_explicit_zero() -> None:
+    args = argparse.Namespace(
+        cells=8,
+        feature_mode=None,
+        input_dim=0,
+        readout=None,
+        seed=7,
+        topology=None,
+    )
+
+    with pytest.raises(ValueError):
+        build_config_from_args(args, benchmark_name="delayed-xor")
+
+
 def test_format_result_outputs_stable_key_value_rows() -> None:
     result = BenchmarkResult(
         benchmark="smoke",
