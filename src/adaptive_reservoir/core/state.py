@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 
 from adaptive_reservoir.core.serialization import (
     numeric_sequence_to_tuple,
+    optional_str,
     require_int,
     require_mapping,
 )
@@ -50,6 +51,7 @@ class ReservoirState:
         """Return a JSON-friendly reservoir state dictionary."""
 
         return {
+            "dtype": str(self.activations.dtype),
             "activations": [float(value) for value in self.activations],
             "fast_trace": [float(value) for value in self.fast_trace],
             "mid_trace": [float(value) for value in self.mid_trace],
@@ -62,7 +64,8 @@ class ReservoirState:
         """Create reservoir state from a JSON-friendly mapping."""
 
         mapping = require_mapping(data, "state")
-        np_dtype = _resolve_dtype(dtype)
+        state_dtype = optional_str(mapping, "dtype", dtype)
+        np_dtype = _resolve_dtype(state_dtype)
         return cls(
             activations=np.asarray(
                 numeric_sequence_to_tuple(mapping.get("activations"), "activations"),
