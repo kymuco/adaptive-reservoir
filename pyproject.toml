@@ -35,6 +35,9 @@ dependencies = [
   "numpy>=1.24"
 ]
 
+[project.scripts]
+adaptive-reservoir-bench = "adaptive_reservoir.benchmarks.runner:main"
+
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
