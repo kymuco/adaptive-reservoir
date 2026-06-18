@@ -192,9 +192,9 @@ def json_friendly(value: object) -> JsonValue:
         return result
     if isinstance(value, np.ndarray):
         return [json_friendly(item) for item in value.tolist()]
-    if isinstance(value, MappingProxyType) or isinstance(value, Mapping):
+    if isinstance(value, (MappingProxyType, Mapping)):
         return {str(key): json_friendly(item) for key, item in value.items()}
-    if isinstance(value, tuple) or isinstance(value, list):
+    if isinstance(value, (tuple, list)):
         return [json_friendly(item) for item in value]
     msg = f"unsupported JSON-friendly value: {type(value).__name__}"
     raise TypeError(msg)
