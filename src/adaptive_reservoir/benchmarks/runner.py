@@ -20,6 +20,16 @@ BENCHMARKS: dict[str, BenchmarkRunner] = {
     "delayed-xor": run_delayed_xor_benchmark,
 }
 
+_BENCHMARK_SPECIFIC_OPTIONS: dict[str, dict[str, str]] = {
+    "concept-drift": {"drift_at": "--drift-at"},
+    "temporal-drift": {
+        "drift_at": "--drift-at",
+        "delay_before": "--delay-before",
+        "delay_after": "--delay-after",
+    },
+    "delayed-xor": {"delay_a": "--delay-a", "delay_b": "--delay-b"},
+}
+
 
 class _BenchmarkArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
@@ -95,6 +105,7 @@ def run_benchmark_from_args(args: argparse.Namespace) -> BenchmarkResult:
         supported = ", ".join(sorted(BENCHMARKS))
         msg = f"unknown benchmark {args.benchmark!r}; supported benchmarks: {supported}"
         raise ValueError(msg)
+    _reject_irrelevant_options(args, benchmark_name=benchmark_name)
 
     config = build_config_from_args(args, benchmark_name=benchmark_name)
     kwargs = _common_kwargs(args)
@@ -152,6 +163,27 @@ def _common_kwargs(args: argparse.Namespace) -> dict[str, int]:
 def _set_optional(kwargs: dict[str, int], key: str, value: int | None) -> None:
     if value is not None:
         kwargs[key] = value
+
+
+def _reject_irrelevant_options(args: argparse.Namespace, *, benchmark_name: str) -> None:
+    allowed = _BENCHMARK_SPECIFIC_OPTIONS[benchmark_name]
+    rejected: list[str] = []
+    for option_name, cli_flag in _all_benchmark_specific_options().items():
+        if option_name in allowed:
+            continue
+        if getattr(args, option_name) is not None:
+            rejected.append(cli_flag)
+    if rejected:
+        flags = ", ".join(rejected)
+        msg = f"{flags} is not supported for {benchmark_name}"
+        raise ValueError(msg)
+
+
+def _all_benchmark_specific_options() -> dict[str, str]:
+    options: dict[str, str] = {}
+    for benchmark_options in _BENCHMARK_SPECIFIC_OPTIONS.values():
+        options.update(benchmark_options)
+    return options
 
 
 def _int_or_default(value: int | None, default: int) -> int:
