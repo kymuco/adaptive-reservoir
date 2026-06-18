@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Protocol, runtime_checkable
@@ -83,7 +83,8 @@ class ReadoutSnapshot:
         _validate_schema_version(self.schema_version)
         _validate_name(self.name)
         state = validate_snapshot_mapping(self.state)
-        object.__setattr__(self, "state", MappingProxyType(dict(state)))
+        frozen_state = _freeze_snapshot_mapping(state)
+        object.__setattr__(self, "state", frozen_state)
 
 
 def validate_features(
@@ -149,6 +150,38 @@ def validate_snapshot_mapping(snapshot: object) -> Mapping[str, object]:
         msg = "snapshot must be a mapping"
         raise ValueError(msg)
     return snapshot
+
+
+def _freeze_snapshot_mapping(snapshot: Mapping[str, object]) -> Mapping[str, object]:
+    return MappingProxyType(
+        {str(key): _freeze_snapshot_value(value) for key, value in snapshot.items()}
+    )
+
+
+def _freeze_snapshot_value(value: object) -> object:
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        if not math.isfinite(value):
+            msg = "readout snapshot float values must be finite"
+            raise ValueError(msg)
+        return value
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.floating):
+        result = float(value)
+        if not math.isfinite(result):
+            msg = "readout snapshot float values must be finite"
+            raise ValueError(msg)
+        return result
+    if isinstance(value, np.ndarray):
+        return tuple(_freeze_snapshot_value(item) for item in value.tolist())
+    if isinstance(value, Mapping):
+        return _freeze_snapshot_mapping(value)
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
+        return tuple(_freeze_snapshot_value(item) for item in value)
+    msg = f"unsupported readout snapshot value: {type(value).__name__}"
+    raise TypeError(msg)
 
 
 def _validate_schema_version(value: int) -> None:
