@@ -172,11 +172,22 @@ def _generate_bits(*, seed: int, length: int) -> np.ndarray:
     return rng.integers(0, 2, size=length, dtype=np.int8)
 
 
-def _sample_at(bits: np.ndarray, index: int, *, input_dim: int) -> tuple[float, ...]:
+def _sample_at(
+    bits: np.ndarray,
+    index: int,
+    *,
+    input_dim: int,
+) -> tuple[float, ...]:
     return tuple(float(bits[index - offset]) for offset in range(input_dim))
 
 
-def _target_at(bits: np.ndarray, index: int, *, delay_a: int, delay_b: int) -> float:
+def _target_at(
+    bits: np.ndarray,
+    index: int,
+    *,
+    delay_a: int,
+    delay_b: int,
+) -> float:
     left = int(bits[index - delay_a])
     right = int(bits[index - delay_b])
     return float(left ^ right)
