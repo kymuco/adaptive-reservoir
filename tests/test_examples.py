@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import pytest
-
 from examples import temporal_drift_demo
 
 
-def test_temporal_drift_demo_main_outputs_expected_sections(
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_temporal_drift_demo_main_outputs_expected_sections(capsys) -> None:
     exit_code = temporal_drift_demo.main()
 
     assert exit_code == 0
