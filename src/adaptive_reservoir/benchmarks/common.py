@@ -131,17 +131,22 @@ def calculate_adapt_steps(
     *,
     start_index: int,
     threshold: float,
+    origin_index: int | None = None,
 ) -> int | None:
-    """Return steps after ``start_index`` until score reaches threshold."""
+    """Return steps from origin until score reaches threshold."""
 
     if start_index < 0:
         msg = "start_index must be non-negative"
+        raise ValueError(msg)
+    origin = start_index if origin_index is None else origin_index
+    if origin < 0 or origin > start_index:
+        msg = "origin_index must be between zero and start_index"
         raise ValueError(msg)
     _validate_score("threshold", threshold)
     for index in range(start_index, len(scores)):
         score = scores[index]
         if score is not None and score >= threshold:
-            return index - start_index + 1
+            return index - origin + 1
     return None
 
 
