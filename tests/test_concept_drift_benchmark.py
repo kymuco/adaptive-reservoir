@@ -60,6 +60,29 @@ def test_concept_drift_benchmark_is_deterministic_except_timing() -> None:
     assert first.samples_seen == second.samples_seen
 
 
+def test_concept_drift_benchmark_applies_seed_to_supplied_config() -> None:
+    stale_seed_result = run_concept_drift_benchmark(
+        _config(seed=123),
+        seed=7,
+        n_samples=220,
+        drift_at=110,
+        score_window=24,
+    )
+    matching_seed_result = run_concept_drift_benchmark(
+        _config(seed=7),
+        seed=7,
+        n_samples=220,
+        drift_at=110,
+        score_window=24,
+    )
+
+    assert stale_seed_result.pre_score == matching_seed_result.pre_score
+    assert stale_seed_result.post_score == matching_seed_result.post_score
+    assert stale_seed_result.final_score == matching_seed_result.final_score
+    assert stale_seed_result.adapt_steps == matching_seed_result.adapt_steps
+    assert stale_seed_result.seed == 7
+
+
 def test_concept_drift_stream_changes_with_seed() -> None:
     first = list(
         _generate_concept_drift_stream(
@@ -155,12 +178,12 @@ def test_concept_drift_benchmark_row_contains_future_report_columns() -> None:
     }
 
 
-def _config() -> ReservoirConfig:
+def _config(*, seed: int = 123) -> ReservoirConfig:
     return ReservoirConfig(
         input_dim=2,
         n_cells=8,
         topology="ring_shortcuts",
         feature_mode="state_slow_raw",
-        seed=123,
+        seed=seed,
         readout=ReadoutConfig(name="sliding_ridge", update_interval=1),
     )
