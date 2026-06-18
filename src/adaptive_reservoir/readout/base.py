@@ -159,21 +159,12 @@ def _freeze_snapshot_mapping(snapshot: Mapping[str, object]) -> Mapping[str, obj
 
 
 def _freeze_snapshot_value(value: object) -> object:
-    if value is None or isinstance(value, (str, bool, int)):
-        return value
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            msg = "readout snapshot float values must be finite"
-            raise ValueError(msg)
+    if value is None or isinstance(value, (str, bool, int, float)):
         return value
     if isinstance(value, np.integer):
         return int(value)
     if isinstance(value, np.floating):
-        result = float(value)
-        if not math.isfinite(result):
-            msg = "readout snapshot float values must be finite"
-            raise ValueError(msg)
-        return result
+        return float(value)
     if isinstance(value, np.ndarray):
         return tuple(_freeze_snapshot_value(item) for item in value.tolist())
     if isinstance(value, Mapping):
