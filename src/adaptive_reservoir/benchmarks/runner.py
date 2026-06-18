@@ -5,20 +5,29 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Callable, Sequence
+from pathlib import Path
 
 from adaptive_reservoir import ReadoutConfig, ReservoirConfig
 from adaptive_reservoir.benchmarks.common import BenchmarkResult
 from adaptive_reservoir.benchmarks.concept_drift import run_concept_drift_benchmark
 from adaptive_reservoir.benchmarks.delayed_xor import run_delayed_xor_benchmark
+from adaptive_reservoir.benchmarks.reports import (
+    format_csv_report,
+    format_json_report,
+    format_markdown_report,
+)
 from adaptive_reservoir.benchmarks.temporal_drift import run_temporal_drift_benchmark
 
 BenchmarkRunner = Callable[..., BenchmarkResult]
+OutputFormat = str
 
 BENCHMARKS: dict[str, BenchmarkRunner] = {
     "concept-drift": run_concept_drift_benchmark,
     "temporal-drift": run_temporal_drift_benchmark,
     "delayed-xor": run_delayed_xor_benchmark,
 }
+
+_OUTPUT_FORMATS = ("text", "csv", "markdown", "json")
 
 _BENCHMARK_SPECIFIC_OPTIONS: dict[str, dict[str, str]] = {
     "concept-drift": {"drift_at": "--drift-at"},
@@ -44,9 +53,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = run_benchmark_from_args(args)
-    except (TypeError, ValueError) as exc:
+        output = format_output([result], output_format=args.format)
+        emit_output(output, output_path=args.output)
+    except (OSError, TypeError, ValueError) as exc:
         parser.exit(2, f"error: {exc}\n")
-    print(format_result(result))
     return 0
 
 
@@ -94,6 +104,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--delay-a", type=int, default=None, help="first delayed XOR lag")
     parser.add_argument("--delay-b", type=int, default=None, help="second delayed XOR lag")
+    parser.add_argument(
+        "--format",
+        choices=_OUTPUT_FORMATS,
+        default="text",
+        help="output format",
+    )
+    parser.add_argument(
+        "--output",
+        default=None,
+        help="write output to a UTF-8 file instead of stdout",
+    )
     return parser
 
 
@@ -137,6 +158,38 @@ def build_config_from_args(
         seed=args.seed,
         readout=ReadoutConfig(name=args.readout or "sliding_ridge", update_interval=1),
     )
+
+
+def format_output(
+    results: Sequence[BenchmarkResult],
+    *,
+    output_format: OutputFormat,
+) -> str:
+    """Format benchmark results for the requested output format."""
+
+    if output_format == "text":
+        if len(results) != 1:
+            msg = "text output requires exactly one benchmark result"
+            raise ValueError(msg)
+        return format_result(results[0])
+    if output_format == "csv":
+        return format_csv_report(results)
+    if output_format == "markdown":
+        return format_markdown_report(results)
+    if output_format == "json":
+        return format_json_report(results)
+    msg = f"unsupported output format: {output_format}"
+    raise ValueError(msg)
+
+
+def emit_output(output: str, *, output_path: str | None) -> None:
+    """Emit benchmark output to stdout or a UTF-8 file."""
+
+    text = output if output.endswith("\n") else output + "\n"
+    if output_path is None:
+        sys.stdout.write(text)
+        return
+    Path(output_path).write_text(text, encoding="utf-8")
 
 
 def format_result(result: BenchmarkResult) -> str:
@@ -228,6 +281,8 @@ __all__ = [
     "BENCHMARKS",
     "build_config_from_args",
     "build_parser",
+    "emit_output",
+    "format_output",
     "format_result",
     "main",
     "normalize_benchmark_name",
