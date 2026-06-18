@@ -185,10 +185,11 @@ def format_output(
 def emit_output(output: str, *, output_path: str | None) -> None:
     """Emit benchmark output to stdout or a UTF-8 file."""
 
+    text = output if output.endswith("\n") else output + "\n"
     if output_path is None:
-        print(output)
+        sys.stdout.write(text)
         return
-    Path(output_path).write_text(output + "\n", encoding="utf-8")
+    Path(output_path).write_text(text, encoding="utf-8")
 
 
 def format_result(result: BenchmarkResult) -> str:
