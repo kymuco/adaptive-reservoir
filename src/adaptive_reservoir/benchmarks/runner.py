@@ -131,7 +131,9 @@ def build_config_from_args(
 def format_result(result: BenchmarkResult) -> str:
     """Format a benchmark result as stable key-value text."""
 
-    return "\n".join(f"{key}: {_format_value(value)}" for key, value in result.to_row().items())
+    return "\n".join(
+        f"{key}: {_format_value(value)}" for key, value in result.to_row().items()
+    )
 
 
 def normalize_benchmark_name(value: str) -> str:
