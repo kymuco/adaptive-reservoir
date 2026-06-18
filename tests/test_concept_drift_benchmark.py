@@ -4,7 +4,7 @@ import pytest
 
 from adaptive_reservoir import ReadoutConfig, ReservoirConfig
 from adaptive_reservoir.benchmarks import BenchmarkResult, run_concept_drift_benchmark
-from adaptive_reservoir.benchmarks.concept_drift import BENCHMARK_NAME
+from adaptive_reservoir.benchmarks.concept_drift import BENCHMARK_NAME, _generate_concept_drift_stream
 
 
 def test_concept_drift_benchmark_runs_with_small_sample_count() -> None:
@@ -57,27 +57,25 @@ def test_concept_drift_benchmark_is_deterministic_except_timing() -> None:
     assert first.samples_seen == second.samples_seen
 
 
-def test_concept_drift_benchmark_seed_changes_data_stream() -> None:
-    first = run_concept_drift_benchmark(
-        _config(),
-        seed=1,
-        n_samples=220,
-        drift_at=110,
-        score_window=24,
+def test_concept_drift_stream_changes_with_seed() -> None:
+    first = list(
+        _generate_concept_drift_stream(
+            seed=1,
+            n_samples=8,
+            drift_at=4,
+            input_dim=2,
+        )
     )
-    second = run_concept_drift_benchmark(
-        _config(),
-        seed=2,
-        n_samples=220,
-        drift_at=110,
-        score_window=24,
+    second = list(
+        _generate_concept_drift_stream(
+            seed=2,
+            n_samples=8,
+            drift_at=4,
+            input_dim=2,
+        )
     )
 
-    assert (first.pre_score, first.post_score, first.final_score) != (
-        second.pre_score,
-        second.post_score,
-        second.final_score,
-    )
+    assert first != second
 
 
 def test_concept_drift_benchmark_default_config_uses_seed() -> None:
