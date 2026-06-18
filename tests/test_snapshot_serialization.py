@@ -48,7 +48,25 @@ def test_readout_snapshot_dict_roundtrip() -> None:
     }
     assert restored.schema_version == snapshot.schema_version
     assert restored.name == snapshot.name
-    assert restored.state == {"weights": [1.0, 2.0], "bias": 0.5}
+    assert restored.state == {"weights": (1.0, 2.0), "bias": 0.5}
+    assert restored.to_dict() == data
+
+
+def test_readout_snapshot_from_dict_deep_freezes_state() -> None:
+    payload = {
+        "schema_version": 1,
+        "name": "smoke",
+        "state": {"weights": [1.0, 2.0], "nested": {"window": [[3.0]]}},
+    }
+
+    snapshot = ReadoutSnapshot.from_dict(payload)
+    payload["state"]["weights"][0] = 99.0  # type: ignore[index]
+    payload["state"]["nested"]["window"][0][0] = 99.0  # type: ignore[index]
+
+    assert snapshot.state["weights"] == (1.0, 2.0)
+    assert snapshot.state["nested"]["window"] == ((3.0,),)  # type: ignore[index]
+    with pytest.raises(TypeError):
+        snapshot.state["weights"][0] = 99.0  # type: ignore[index]
 
 
 def test_channel_snapshot_dict_roundtrip() -> None:
