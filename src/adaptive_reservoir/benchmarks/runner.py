@@ -119,8 +119,8 @@ def build_config_from_args(
     """Build a reservoir config from CLI options."""
 
     return ReservoirConfig(
-        input_dim=args.input_dim or _default_input_dim(benchmark_name),
-        n_cells=args.cells or _default_cells(benchmark_name),
+        input_dim=_int_or_default(args.input_dim, _default_input_dim(benchmark_name)),
+        n_cells=_int_or_default(args.cells, _default_cells(benchmark_name)),
         topology=args.topology or _default_topology(benchmark_name),
         feature_mode=args.feature_mode or _default_feature_mode(benchmark_name),
         seed=args.seed,
@@ -152,6 +152,12 @@ def _common_kwargs(args: argparse.Namespace) -> dict[str, int]:
 def _set_optional(kwargs: dict[str, int], key: str, value: int | None) -> None:
     if value is not None:
         kwargs[key] = value
+
+
+def _int_or_default(value: int | None, default: int) -> int:
+    if value is None:
+        return default
+    return value
 
 
 def _default_input_dim(benchmark_name: str) -> int:
