@@ -193,7 +193,7 @@ def _config(
 
 
 def _assert_json_friendly(value: object) -> None:
-    if value is None or isinstance(value, str | int | float | bool):
+    if value is None or isinstance(value, (str, int, float, bool)):
         return
     assert not isinstance(value, tuple)
     assert not isinstance(value, np.ndarray)
@@ -216,7 +216,7 @@ def _walk_keys(value: object) -> list[str]:
             keys.append(str(key))
             keys.extend(_walk_keys(item))
         return keys
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes):
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
         keys = []
         for item in value:
             keys.extend(_walk_keys(item))
