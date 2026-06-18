@@ -114,6 +114,17 @@ def test_calculate_adapt_steps_returns_first_recovery() -> None:
     assert steps == 3
 
 
+def test_calculate_adapt_steps_can_count_from_earlier_origin() -> None:
+    steps = calculate_adapt_steps(
+        [None, 0.1, 0.4, 0.8, 0.9],
+        start_index=3,
+        threshold=0.75,
+        origin_index=1,
+    )
+
+    assert steps == 3
+
+
 def test_readout_sparsity_returns_none_for_object_without_weights() -> None:
     assert readout_sparsity(object()) is None
 
