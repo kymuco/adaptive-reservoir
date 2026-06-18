@@ -141,7 +141,10 @@ def _generate_concept_drift_stream(
     rng = np.random.default_rng(seed)
     for index in range(n_samples):
         sample = rng.uniform(-1.0, 1.0, size=input_dim)
-        target = _target_before_drift(sample) if index < drift_at else _target_after_drift(sample)
+        if index < drift_at:
+            target = _target_before_drift(sample)
+        else:
+            target = _target_after_drift(sample)
         yield tuple(float(value) for value in sample), target
 
 
