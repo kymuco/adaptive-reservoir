@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Literal, cast
 
@@ -295,9 +294,6 @@ class ReservoirConfig:
         _validate_positive_float("input_scale", self.input_scale)
         _validate_non_negative_float("recurrent_scale", self.recurrent_scale)
         _validate_non_negative_float("fatigue_rate", self.fatigue_rate)
-
-
-JsonConfigDict = dict[str, object]
 
 
 def _validate_choice(name: str, value: str, allowed: frozenset[str]) -> None:
