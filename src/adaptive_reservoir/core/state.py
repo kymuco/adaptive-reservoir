@@ -7,6 +7,12 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
+from adaptive_reservoir.core.serialization import (
+    numeric_sequence_to_tuple,
+    require_int,
+    require_mapping,
+)
+
 FloatArray = NDArray[np.floating]
 
 
@@ -38,6 +44,43 @@ class ReservoirState:
             mid_trace=np.zeros(n_cells, dtype=np_dtype),
             slow_trace=np.zeros(n_cells, dtype=np_dtype),
             samples_seen=0,
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-friendly reservoir state dictionary."""
+
+        return {
+            "activations": [float(value) for value in self.activations],
+            "fast_trace": [float(value) for value in self.fast_trace],
+            "mid_trace": [float(value) for value in self.mid_trace],
+            "slow_trace": [float(value) for value in self.slow_trace],
+            "samples_seen": self.samples_seen,
+        }
+
+    @classmethod
+    def from_dict(cls, data: object, *, dtype: str = "float64") -> ReservoirState:
+        """Create reservoir state from a JSON-friendly mapping."""
+
+        mapping = require_mapping(data, "state")
+        np_dtype = _resolve_dtype(dtype)
+        return cls(
+            activations=np.asarray(
+                numeric_sequence_to_tuple(mapping.get("activations"), "activations"),
+                dtype=np_dtype,
+            ),
+            fast_trace=np.asarray(
+                numeric_sequence_to_tuple(mapping.get("fast_trace"), "fast_trace"),
+                dtype=np_dtype,
+            ),
+            mid_trace=np.asarray(
+                numeric_sequence_to_tuple(mapping.get("mid_trace"), "mid_trace"),
+                dtype=np_dtype,
+            ),
+            slow_trace=np.asarray(
+                numeric_sequence_to_tuple(mapping.get("slow_trace"), "slow_trace"),
+                dtype=np_dtype,
+            ),
+            samples_seen=require_int(mapping, "samples_seen"),
         )
 
     def __post_init__(self) -> None:
