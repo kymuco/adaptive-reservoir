@@ -68,10 +68,12 @@ def run_concept_drift_benchmark(
         targets,
         window=score_window,
     )
+    recovery_search_start = drift_at + score_window - 1
     adapt_steps = calculate_adapt_steps(
         rolling_scores,
-        start_index=drift_at,
+        start_index=recovery_search_start,
         threshold=max(0.75, pre_score * 0.9),
+        origin_index=drift_at,
     )
     metrics = model.metrics_snapshot()
 
