@@ -11,6 +11,13 @@ from typing import Protocol, runtime_checkable
 import numpy as np
 from numpy.typing import NDArray
 
+from adaptive_reservoir.core.serialization import (
+    json_friendly,
+    require_int,
+    require_mapping,
+    require_str,
+)
+
 FloatArray = NDArray[np.floating]
 READOUT_SNAPSHOT_SCHEMA_VERSION = 1
 
@@ -51,6 +58,26 @@ class ReadoutSnapshot:
     schema_version: int
     name: str
     state: Mapping[str, object]
+
+    def to_dict(self) -> dict[str, object]:
+        """Return a JSON-friendly readout snapshot dictionary."""
+
+        return {
+            "schema_version": self.schema_version,
+            "name": self.name,
+            "state": json_friendly(self.state),
+        }
+
+    @classmethod
+    def from_dict(cls, data: object) -> ReadoutSnapshot:
+        """Create a readout snapshot from a JSON-friendly mapping."""
+
+        mapping = require_mapping(data, "readout")
+        return cls(
+            schema_version=require_int(mapping, "schema_version"),
+            name=require_str(mapping, "name"),
+            state=require_mapping(mapping.get("state"), "state"),
+        )
 
     def __post_init__(self) -> None:
         _validate_schema_version(self.schema_version)
