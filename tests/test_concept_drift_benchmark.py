@@ -4,7 +4,10 @@ import pytest
 
 from adaptive_reservoir import ReadoutConfig, ReservoirConfig
 from adaptive_reservoir.benchmarks import BenchmarkResult, run_concept_drift_benchmark
-from adaptive_reservoir.benchmarks.concept_drift import BENCHMARK_NAME, _generate_concept_drift_stream
+from adaptive_reservoir.benchmarks.concept_drift import (
+    BENCHMARK_NAME,
+    _generate_concept_drift_stream,
+)
 
 
 def test_concept_drift_benchmark_runs_with_small_sample_count() -> None:
