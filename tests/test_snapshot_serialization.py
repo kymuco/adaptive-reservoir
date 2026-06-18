@@ -97,7 +97,7 @@ def test_reservoir_snapshot_dict_roundtrip() -> None:
 
     assert restored.schema_version == snapshot.schema_version
     assert restored.state.activations.dtype == np.float32
-    assert restored.readout == snapshot.readout
+    assert restored.readout.to_dict() == snapshot.readout.to_dict()
     assert restored.channels == snapshot.channels
     assert restored.metrics == snapshot.metrics
 
