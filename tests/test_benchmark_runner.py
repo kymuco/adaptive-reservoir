@@ -209,6 +209,28 @@ def test_main_runs_delayed_xor(capsys: pytest.CaptureFixture[str]) -> None:
     assert "samples_seen: 240" in output
 
 
+def test_main_rejects_delayed_xor_flags_for_temporal_drift(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["temporal-drift", "--delay-a", "2", "--delay-b", "5"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "--delay-a, --delay-b is not supported for temporal-drift" in captured.err
+
+
+def test_main_rejects_temporal_drift_flags_for_delayed_xor(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["delayed-xor", "--delay-before", "2", "--delay-after", "8"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "--delay-before, --delay-after is not supported for delayed-xor" in captured.err
+
+
 def test_main_rejects_unknown_benchmark(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit) as exc_info:
         main(["unknown"])
