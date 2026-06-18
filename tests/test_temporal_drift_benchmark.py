@@ -34,7 +34,9 @@ def test_temporal_drift_benchmark_runs_with_small_sample_count() -> None:
     assert 0.0 <= result.post_score <= 1.0
     assert 0.0 <= result.final_score <= 1.0
     assert 0.0 <= result.saturation_rate <= 1.0
-    assert result.readout_sparsity is None or 0.0 <= result.readout_sparsity <= 1.0
+    assert result.readout_sparsity is None or (
+        0.0 <= result.readout_sparsity <= 1.0
+    )
 
 
 def test_temporal_drift_benchmark_is_deterministic_except_timing() -> None:
