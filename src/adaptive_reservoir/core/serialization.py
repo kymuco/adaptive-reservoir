@@ -9,9 +9,7 @@ from typing import TypeAlias
 
 import numpy as np
 
-JsonValue: TypeAlias = (
-    None | bool | int | float | str | list["JsonValue"] | dict[str, "JsonValue"]
-)
+JsonValue: TypeAlias = object
 
 
 def require_mapping(data: object, name: str) -> Mapping[str, object]:
