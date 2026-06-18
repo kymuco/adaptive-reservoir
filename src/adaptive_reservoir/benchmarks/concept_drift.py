@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from dataclasses import replace
 
 import numpy as np
 
@@ -29,7 +30,7 @@ def run_concept_drift_benchmark(
 ) -> BenchmarkResult:
     """Run a deterministic abrupt concept-drift benchmark."""
 
-    reservoir_config = config or _default_config(seed=seed)
+    reservoir_config = _config_for_seed(config, seed=seed)
     _validate_benchmark_args(
         config=reservoir_config,
         n_samples=n_samples,
@@ -95,6 +96,12 @@ def run_concept_drift_benchmark(
     )
 
 
+def _config_for_seed(config: ReservoirConfig | None, *, seed: int) -> ReservoirConfig:
+    if config is None:
+        return _default_config(seed=seed)
+    return replace(config, seed=seed)
+
+
 def _default_config(*, seed: int) -> ReservoirConfig:
     return ReservoirConfig(
         input_dim=2,
@@ -143,10 +150,7 @@ def _generate_concept_drift_stream(
     rng = np.random.default_rng(seed)
     for index in range(n_samples):
         sample = rng.uniform(-1.0, 1.0, size=input_dim)
-        if index < drift_at:
-            target = _target_before_drift(sample)
-        else:
-            target = _target_after_drift(sample)
+        target = _target_before_drift(sample) if index < drift_at else _target_after_drift(sample)
         yield tuple(float(value) for value in sample), target
 
 
