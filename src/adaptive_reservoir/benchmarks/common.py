@@ -160,7 +160,7 @@ def readout_sparsity(model: object, *, epsilon: float = 1e-8) -> float | None:
     if readout is None or not hasattr(readout, "weights"):
         return None
     try:
-        weights = getattr(readout, "weights")
+        weights = readout.weights
     except Exception:
         return None
     array = np.asarray(weights, dtype=np.float64)
