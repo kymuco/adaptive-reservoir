@@ -5,9 +5,10 @@ from __future__ import annotations
 import csv
 import json
 import math
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from io import StringIO
+from typing import cast
 
 import numpy as np
 
@@ -18,7 +19,7 @@ from adaptive_reservoir.benchmarks.common import (
     regression_score,
     rolling_regression_scores,
 )
-from adaptive_reservoir.core.config import FEATURE_MODES, TOPOLOGY_NAMES
+from adaptive_reservoir.core.config import FEATURE_MODES, TOPOLOGY_NAMES, FeatureMode, TopologyName
 from adaptive_reservoir.experimental.rls import RLS_READOUT_NAME, RLSReadout
 from adaptive_reservoir.features import extract_features
 
@@ -204,7 +205,9 @@ def format_rls_sweep_csv_report(results: Sequence[RLSSweepResult]) -> str:
     writer = csv.writer(output, lineterminator="\n")
     writer.writerow(RLS_SWEEP_REPORT_COLUMNS)
     for row in _rls_sweep_rows(results):
-        writer.writerow([_format_report_value(row[column]) for column in RLS_SWEEP_REPORT_COLUMNS])
+        writer.writerow(
+            [_format_report_value(row[column]) for column in RLS_SWEEP_REPORT_COLUMNS]
+        )
     return output.getvalue()
 
 
@@ -245,19 +248,17 @@ def _run_single_rls_sweep_case(
     config = ReservoirConfig(
         input_dim=input_dim,
         n_cells=n_cells,
-        topology=topology,  # type: ignore[arg-type]
-        feature_mode=feature_mode,  # type: ignore[arg-type]
+        topology=cast(TopologyName, topology),
+        feature_mode=cast(FeatureMode, feature_mode),
         seed=seed,
         dtype="float64",
         readout=ReadoutConfig(name="sliding_ridge", update_interval=1),
     )
     model = AdaptiveReservoir(config)
-    features = extract_features(model._core.state, config.feature_mode)  # noqa: SLF001
-    model._readout = RLSReadout(  # noqa: SLF001
-        feature_dim=int(features.size),
+    _install_experimental_rls_readout(
+        model,
         forgetting_factor=forgetting_factor,
         covariance_scale=covariance_scale,
-        dtype=config.dtype,
     )
 
     predictions: list[float] = []
@@ -316,6 +317,21 @@ def _run_single_rls_sweep_case(
     )
 
 
+def _install_experimental_rls_readout(
+    model: AdaptiveReservoir,
+    *,
+    forgetting_factor: float,
+    covariance_scale: float,
+) -> None:
+    features = extract_features(model._core.state, model.config.feature_mode)
+    model._readout = RLSReadout(
+        feature_dim=int(features.size),
+        forgetting_factor=forgetting_factor,
+        covariance_scale=covariance_scale,
+        dtype=model.config.dtype,
+    )
+
+
 def _generate_concept_drift_stream(
     *,
     seed: int,
@@ -326,7 +342,10 @@ def _generate_concept_drift_stream(
     rng = np.random.default_rng(seed)
     for index in range(n_samples):
         sample = rng.uniform(-1.0, 1.0, size=input_dim)
-        target = _target_before_drift(sample) if index < drift_at else _target_after_drift(sample)
+        if index < drift_at:
+            target = _target_before_drift(sample)
+        else:
+            target = _target_after_drift(sample)
         yield tuple(float(value) for value in sample), target
 
 
@@ -367,7 +386,7 @@ def _validate_float_grid(
     name: str,
     values: Sequence[float],
     *,
-    validator: callable,
+    validator: Callable[[float], float],
 ) -> tuple[float, ...]:
     if isinstance(values, (str, bytes)):
         msg = f"{name} grid must be a numeric sequence"
