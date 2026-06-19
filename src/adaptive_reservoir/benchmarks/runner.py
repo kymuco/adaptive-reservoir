@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
@@ -16,9 +17,19 @@ from adaptive_reservoir.benchmarks.reports import (
     format_json_report,
     format_markdown_report,
 )
+from adaptive_reservoir.benchmarks.rls_sweep import (
+    DEFAULT_COVARIANCE_SCALES,
+    DEFAULT_FEATURE_MODES,
+    DEFAULT_LAMBDAS,
+    DEFAULT_TOPOLOGIES,
+    RLSSweepResult,
+    format_rls_sweep_output,
+    run_rls_sweep,
+)
 from adaptive_reservoir.benchmarks.temporal_drift import run_temporal_drift_benchmark
 
 BenchmarkRunner = Callable[..., BenchmarkResult]
+BenchmarkRunOutput = BenchmarkResult | tuple[RLSSweepResult, ...]
 OutputFormat = str
 
 BENCHMARKS: dict[str, BenchmarkRunner] = {
@@ -26,6 +37,7 @@ BENCHMARKS: dict[str, BenchmarkRunner] = {
     "temporal-drift": run_temporal_drift_benchmark,
     "delayed-xor": run_delayed_xor_benchmark,
 }
+SWEEP_BENCHMARKS = frozenset(("rls-sweep",))
 
 _OUTPUT_FORMATS = ("text", "csv", "markdown", "json")
 
@@ -37,6 +49,11 @@ _BENCHMARK_SPECIFIC_OPTIONS: dict[str, dict[str, str]] = {
         "delay_after": "--delay-after",
     },
     "delayed-xor": {"delay_a": "--delay-a", "delay_b": "--delay-b"},
+    "rls-sweep": {
+        "drift_at": "--drift-at",
+        "rls_lambdas": "--lambda",
+        "covariance_scales": "--covariance-scale",
+    },
 }
 
 
@@ -53,7 +70,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         result = run_benchmark_from_args(args)
-        output = format_output([result], output_format=args.format)
+        output = format_benchmark_output(result, output_format=args.format)
         emit_output(output, output_path=args.output)
     except (OSError, TypeError, ValueError) as exc:
         parser.exit(2, f"error: {exc}\n")
@@ -69,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "benchmark",
-        help="benchmark name: concept-drift, temporal-drift, or delayed-xor",
+        help="benchmark name: concept-drift, temporal-drift, delayed-xor, or rls-sweep",
     )
     parser.add_argument("--seed", type=int, default=0, help="benchmark and model seed")
     parser.add_argument("--samples", type=int, default=None, help="number of benchmark samples")
@@ -81,8 +98,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--cells", type=int, default=None, help="reservoir cell count")
     parser.add_argument("--input-dim", type=int, default=None, help="input vector dimension")
-    parser.add_argument("--topology", default=None, help="reservoir topology")
-    parser.add_argument("--feature-mode", default=None, help="reservoir feature mode")
+    parser.add_argument("--topology", default=None, help="reservoir topology or CSV list for rls-sweep")
+    parser.add_argument(
+        "--feature-mode",
+        default=None,
+        help="reservoir feature mode or CSV list for rls-sweep",
+    )
     parser.add_argument("--readout", default=None, help="readout name")
     parser.add_argument(
         "--drift-at",
@@ -105,6 +126,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--delay-a", type=int, default=None, help="first delayed XOR lag")
     parser.add_argument("--delay-b", type=int, default=None, help="second delayed XOR lag")
     parser.add_argument(
+        "--lambda",
+        dest="rls_lambdas",
+        default=None,
+        help="CSV forgetting-factor grid for rls-sweep",
+    )
+    parser.add_argument(
+        "--covariance-scale",
+        dest="covariance_scales",
+        default=None,
+        help="CSV covariance-scale grid for rls-sweep",
+    )
+    parser.add_argument(
         "--format",
         choices=_OUTPUT_FORMATS,
         default="text",
@@ -118,15 +151,18 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def run_benchmark_from_args(args: argparse.Namespace) -> BenchmarkResult:
+def run_benchmark_from_args(args: argparse.Namespace) -> BenchmarkRunOutput:
     """Run the selected benchmark from parsed CLI arguments."""
 
     benchmark_name = normalize_benchmark_name(args.benchmark)
-    if benchmark_name not in BENCHMARKS:
-        supported = ", ".join(sorted(BENCHMARKS))
+    if benchmark_name not in BENCHMARKS and benchmark_name not in SWEEP_BENCHMARKS:
+        supported = ", ".join(sorted((*BENCHMARKS, *SWEEP_BENCHMARKS)))
         msg = f"unknown benchmark {args.benchmark!r}; supported benchmarks: {supported}"
         raise ValueError(msg)
     _reject_irrelevant_options(args, benchmark_name=benchmark_name)
+
+    if benchmark_name == "rls-sweep":
+        return run_rls_sweep_from_args(args)
 
     config = build_config_from_args(args, benchmark_name=benchmark_name)
     kwargs = _common_kwargs(args)
@@ -141,6 +177,29 @@ def run_benchmark_from_args(args: argparse.Namespace) -> BenchmarkResult:
     _set_optional(kwargs, "delay_a", args.delay_a)
     _set_optional(kwargs, "delay_b", args.delay_b)
     return run_delayed_xor_benchmark(config, **kwargs)
+
+
+def run_rls_sweep_from_args(args: argparse.Namespace) -> tuple[RLSSweepResult, ...]:
+    """Run the experimental RLS sweep from parsed CLI arguments."""
+
+    if args.format == "text":
+        msg = "text output is not supported for rls-sweep; use csv, markdown, or json"
+        raise ValueError(msg)
+    return run_rls_sweep(
+        seed=args.seed,
+        n_samples=_int_or_default(args.samples, 900),
+        drift_at=_int_or_default(args.drift_at, 450),
+        score_window=_int_or_default(args.score_window, 64),
+        input_dim=_int_or_default(args.input_dim, 2),
+        n_cells=_int_or_default(args.cells, 64),
+        forgetting_factors=_float_csv_or_default(args.rls_lambdas, DEFAULT_LAMBDAS),
+        covariance_scales=_float_csv_or_default(
+            args.covariance_scales,
+            DEFAULT_COVARIANCE_SCALES,
+        ),
+        feature_modes=_str_csv_or_default(args.feature_mode, DEFAULT_FEATURE_MODES),
+        topologies=_str_csv_or_default(args.topology, DEFAULT_TOPOLOGIES),
+    )
 
 
 def build_config_from_args(
@@ -158,6 +217,18 @@ def build_config_from_args(
         seed=args.seed,
         readout=ReadoutConfig(name=args.readout or "sliding_ridge", update_interval=1),
     )
+
+
+def format_benchmark_output(
+    result: BenchmarkRunOutput,
+    *,
+    output_format: OutputFormat,
+) -> str:
+    """Format either a single benchmark result or an experimental sweep result set."""
+
+    if isinstance(result, BenchmarkResult):
+        return format_output([result], output_format=output_format)
+    return format_rls_sweep_output(result, output_format=output_format)
 
 
 def format_output(
@@ -245,6 +316,37 @@ def _int_or_default(value: int | None, default: int) -> int:
     return value
 
 
+def _float_csv_or_default(value: str | None, default: Sequence[float]) -> tuple[float, ...]:
+    if value is None:
+        return tuple(default)
+    parsed: list[float] = []
+    for item in _split_csv(value):
+        try:
+            number = float(item)
+        except ValueError as exc:
+            msg = f"expected a numeric CSV value; got {item!r}"
+            raise ValueError(msg) from exc
+        if not math.isfinite(number):
+            msg = f"expected a finite CSV value; got {item!r}"
+            raise ValueError(msg)
+        parsed.append(number)
+    return tuple(parsed)
+
+
+def _str_csv_or_default(value: str | None, default: Sequence[str]) -> tuple[str, ...]:
+    if value is None:
+        return tuple(default)
+    return tuple(_split_csv(value))
+
+
+def _split_csv(value: str) -> tuple[str, ...]:
+    items = tuple(item.strip() for item in value.split(",") if item.strip())
+    if not items:
+        msg = "CSV value must not be empty"
+        raise ValueError(msg)
+    return items
+
+
 def _default_input_dim(benchmark_name: str) -> int:
     if benchmark_name == "delayed-xor":
         return 1
@@ -279,12 +381,15 @@ def _format_value(value: object) -> str:
 
 __all__ = [
     "BENCHMARKS",
+    "SWEEP_BENCHMARKS",
     "build_config_from_args",
     "build_parser",
     "emit_output",
+    "format_benchmark_output",
     "format_output",
     "format_result",
     "main",
     "normalize_benchmark_name",
     "run_benchmark_from_args",
+    "run_rls_sweep_from_args",
 ]
