@@ -19,6 +19,7 @@ from adaptive_reservoir.readout.base import FloatArray, validate_features
 
 OJA_COMPRESSOR_NAME = "experimental_oja_compressor"
 OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION = 1
+_ORTHONORMAL_TOLERANCE = 1e-5
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,11 +54,15 @@ class OjaCompressorSnapshot:
         )
 
     def __post_init__(self) -> None:
-        if self.schema_version <= 0:
-            msg = "schema_version must be positive"
+        if (
+            isinstance(self.schema_version, bool)
+            or not isinstance(self.schema_version, int)
+            or self.schema_version <= 0
+        ):
+            msg = "schema_version must be a positive integer"
             raise ValueError(msg)
-        if not self.name:
-            msg = "name must not be empty"
+        if not isinstance(self.name, str) or not self.name:
+            msg = "name must be a non-empty string"
             raise ValueError(msg)
         state = validate_snapshot_mapping(self.state)
         object.__setattr__(self, "state", _freeze_snapshot_mapping(state))
@@ -277,9 +282,23 @@ def _validate_components(
     if not np.all(np.isfinite(matrix)):
         msg = "snapshot state.components must contain only finite values"
         raise ValueError(msg)
+    _validate_orthonormal_rows(matrix)
     restored = matrix.copy()
     restored.setflags(write=False)
     return restored
+
+
+def _validate_orthonormal_rows(matrix: FloatArray) -> None:
+    gram = np.asarray(matrix, dtype="float64") @ np.asarray(matrix, dtype="float64").T
+    expected = np.eye(matrix.shape[0], dtype="float64")
+    if not np.allclose(
+        gram,
+        expected,
+        atol=_ORTHONORMAL_TOLERANCE,
+        rtol=_ORTHONORMAL_TOLERANCE,
+    ):
+        msg = "snapshot state.components rows must be orthonormal"
+        raise ValueError(msg)
 
 
 def _validate_positive_int(name: str, value: int) -> int:
