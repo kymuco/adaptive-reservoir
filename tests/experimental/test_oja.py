@@ -28,6 +28,10 @@ _COMPONENTS_BAD_SHAPE = (
     (1.0, 0.0, 0.0),
     (0.0, 1.0, 0.0),
 )
+_COMPONENTS_NOT_ORTHONORMAL = (
+    (1.0, 0.0, 0.0, 0.0),
+    (1.0, 0.0, 0.0, 0.0),
+)
 
 
 def _snapshot(
@@ -195,6 +199,7 @@ def test_snapshot_to_dict_and_from_dict_roundtrip() -> None:
         _snapshot(learning_rate=0.02),
         _snapshot(dtype="float32"),
         _snapshot(components=_COMPONENTS_BAD_SHAPE),
+        _snapshot(components=_COMPONENTS_NOT_ORTHONORMAL),
         _snapshot(samples_seen=-1),
     ],
 )
