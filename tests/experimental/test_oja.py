@@ -149,7 +149,7 @@ def test_update_keeps_components_finite_and_row_normalized() -> None:
     assert np.allclose(row_norms, np.ones(2), atol=1e-6)
 
 
-def test_snapshot_restore_roundtrip_preserves_transform() -> None:
+def test_snapshot_restore_roundtrip_preserves_transform_and_seed() -> None:
     compressor = OjaCompressor(
         input_dim=5,
         output_dim=2,
@@ -174,11 +174,13 @@ def test_snapshot_restore_roundtrip_preserves_transform() -> None:
     assert snapshot.name == OJA_COMPRESSOR_NAME
     assert snapshot.schema_version == OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION
     assert restored.samples_seen == compressor.samples_seen
+    assert restored.seed == compressor.seed
+    assert restored.snapshot().state["seed"] == snapshot.state["seed"]
     assert np.allclose(restored.components, compressor.components)
     assert np.allclose(restored.transform(features), compressor.transform(features))
 
 
-def test_snapshot_to_dict_and_from_dict_roundtrip() -> None:
+def test_snapshot_to_dict_and_from_dict_roundtrip_preserves_seed() -> None:
     compressor = OjaCompressor(input_dim=4, output_dim=2, seed=21)
     compressor.update([1.0, 0.5, -0.5, 0.25])
 
@@ -186,6 +188,8 @@ def test_snapshot_to_dict_and_from_dict_roundtrip() -> None:
     restored = OjaCompressor(input_dim=4, output_dim=2, seed=99)
     restored.restore(restored_snapshot)
 
+    assert restored.seed == compressor.seed
+    assert restored.snapshot().state["seed"] == compressor.snapshot().state["seed"]
     assert np.allclose(restored.components, compressor.components)
     assert restored.samples_seen == compressor.samples_seen
 
@@ -230,6 +234,7 @@ def test_restore_rejects_non_oja_snapshot() -> None:
         {"input_dim": 4, "output_dim": 2, "learning_rate": float("inf")},
         {"input_dim": 4, "output_dim": 2, "seed": True},
         {"input_dim": 4, "output_dim": 2, "seed": 1.5},
+        {"input_dim": 4, "output_dim": 2, "dtype": "float16"},
         {"input_dim": 4, "output_dim": 2, "dtype": "int64"},
     ],
 )
