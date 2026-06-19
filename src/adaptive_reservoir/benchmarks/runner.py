@@ -98,7 +98,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--cells", type=int, default=None, help="reservoir cell count")
     parser.add_argument("--input-dim", type=int, default=None, help="input vector dimension")
-    parser.add_argument("--topology", default=None, help="reservoir topology or CSV list for rls-sweep")
+    parser.add_argument(
+        "--topology",
+        default=None,
+        help="reservoir topology or CSV list for rls-sweep",
+    )
     parser.add_argument(
         "--feature-mode",
         default=None,
@@ -184,6 +188,9 @@ def run_rls_sweep_from_args(args: argparse.Namespace) -> tuple[RLSSweepResult, .
 
     if args.format == "text":
         msg = "text output is not supported for rls-sweep; use csv, markdown, or json"
+        raise ValueError(msg)
+    if args.readout is not None:
+        msg = "--readout is not supported for rls-sweep; it always uses experimental_rls"
         raise ValueError(msg)
     return run_rls_sweep(
         seed=args.seed,
@@ -316,7 +323,10 @@ def _int_or_default(value: int | None, default: int) -> int:
     return value
 
 
-def _float_csv_or_default(value: str | None, default: Sequence[float]) -> tuple[float, ...]:
+def _float_csv_or_default(
+    value: str | None,
+    default: Sequence[float],
+) -> tuple[float, ...]:
     if value is None:
         return tuple(default)
     parsed: list[float] = []
