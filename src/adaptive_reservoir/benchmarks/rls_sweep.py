@@ -19,7 +19,12 @@ from adaptive_reservoir.benchmarks.common import (
     regression_score,
     rolling_regression_scores,
 )
-from adaptive_reservoir.core.config import FEATURE_MODES, TOPOLOGY_NAMES, FeatureMode, TopologyName
+from adaptive_reservoir.core.config import (
+    FEATURE_MODES,
+    TOPOLOGY_NAMES,
+    FeatureMode,
+    TopologyName,
+)
 from adaptive_reservoir.experimental.rls import RLS_READOUT_NAME, RLSReadout
 from adaptive_reservoir.features import extract_features
 
