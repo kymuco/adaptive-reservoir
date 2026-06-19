@@ -4,12 +4,11 @@ import numpy as np
 import pytest
 
 from adaptive_reservoir.core.config import READOUT_NAMES, ReadoutConfig
-from adaptive_reservoir.readout.base import READOUT_SNAPSHOT_SCHEMA_VERSION, ReadoutSnapshot
-from adaptive_reservoir.readout.factory import create_readout
 from adaptive_reservoir.experimental.sparse_readout import (
     SPARSE_ONLINE_READOUT_NAME,
     SparseOnlineReadout,
 )
+from adaptive_reservoir.readout.base import READOUT_SNAPSHOT_SCHEMA_VERSION, ReadoutSnapshot
 
 
 def test_predict_starts_at_zero() -> None:
@@ -253,11 +252,4 @@ def test_sparse_readout_is_not_registered_as_stable_readout() -> None:
     assert SPARSE_ONLINE_READOUT_NAME not in READOUT_NAMES
 
     with pytest.raises(ValueError):
-        ReadoutConfig(name=SPARSE_ONLINE_READOUT_NAME)  # type: ignore[arg-type]
-    with pytest.raises(ValueError):
-        create_readout(
-            config=ReadoutConfig(name="nlms"),
-            feature_dim=2,
-            dtype="float64",
-        )
         ReadoutConfig(name=SPARSE_ONLINE_READOUT_NAME)  # type: ignore[arg-type]
