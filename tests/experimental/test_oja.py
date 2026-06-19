@@ -30,6 +30,33 @@ _COMPONENTS_BAD_SHAPE = (
 )
 
 
+def _snapshot(
+    *,
+    schema_version: int = OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
+    name: str = OJA_COMPRESSOR_NAME,
+    input_dim: int = 4,
+    output_dim: int = 2,
+    learning_rate: float = 0.01,
+    seed: int | None = 1,
+    dtype: str = "float64",
+    components: tuple[tuple[float, ...], ...] = _COMPONENTS_4X2,
+    samples_seen: int = 0,
+) -> OjaCompressorSnapshot:
+    return OjaCompressorSnapshot(
+        schema_version=schema_version,
+        name=name,
+        state={
+            "input_dim": input_dim,
+            "output_dim": output_dim,
+            "learning_rate": learning_rate,
+            "seed": seed,
+            "dtype": dtype,
+            "components": components,
+            "samples_seen": samples_seen,
+        },
+    )
+
+
 def test_transform_returns_expected_shape() -> None:
     compressor = OjaCompressor(input_dim=5, output_dim=2, seed=7)
 
@@ -222,30 +249,3 @@ def test_transform_and_update_validate_features() -> None:
 def test_oja_compressor_is_not_root_public_api() -> None:
     assert "OjaCompressor" not in adaptive_reservoir.__all__
     assert not hasattr(adaptive_reservoir, "OjaCompressor")
-
-
-def _snapshot(
-    *,
-    schema_version: int = OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-    name: str = OJA_COMPRESSOR_NAME,
-    input_dim: int = 4,
-    output_dim: int = 2,
-    learning_rate: float = 0.01,
-    seed: int | None = 1,
-    dtype: str = "float64",
-    components: tuple[tuple[float, ...], ...] = _COMPONENTS_4X2,
-    samples_seen: int = 0,
-) -> OjaCompressorSnapshot:
-    return OjaCompressorSnapshot(
-        schema_version=schema_version,
-        name=name,
-        state={
-            "input_dim": input_dim,
-            "output_dim": output_dim,
-            "learning_rate": learning_rate,
-            "seed": seed,
-            "dtype": dtype,
-            "components": components,
-            "samples_seen": samples_seen,
-        },
-    )
