@@ -20,6 +20,7 @@ from adaptive_reservoir.readout.base import FloatArray, validate_features
 OJA_COMPRESSOR_NAME = "experimental_oja_compressor"
 OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION = 1
 _ORTHONORMAL_TOLERANCE = 1e-5
+_SUPPORTED_DTYPES = frozenset(("float32", "float64"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -194,6 +195,7 @@ class OjaCompressor:
         if learning_rate != self.learning_rate:
             msg = "snapshot learning_rate must match current compressor"
             raise ValueError(msg)
+        seed = _required_seed(state, "seed")
         dtype = _required_str(state, "dtype")
         if np.dtype(dtype) != np.dtype(self.dtype):
             msg = f"snapshot dtype must match {self.dtype!r}; got {dtype!r}"
@@ -210,6 +212,7 @@ class OjaCompressor:
             raise ValueError(msg)
 
         components.setflags(write=False)
+        self.seed = seed
         self._components = components
         self._samples_seen = samples_seen
 
@@ -316,7 +319,7 @@ def _validate_positive_finite(name: str, value: float) -> float:
     return result
 
 
-def _validate_seed(value: int | None) -> int | None:
+def _validate_seed(value: object) -> int | None:
     if value is None:
         return None
     if isinstance(value, bool) or not isinstance(value, int):
@@ -334,6 +337,9 @@ def _validate_floating_dtype(value: str) -> str:
     if not np.issubdtype(dtype, np.floating):
         msg = "dtype must be a floating dtype"
         raise ValueError(msg)
+    if dtype.name not in _SUPPORTED_DTYPES:
+        msg = "dtype must be 'float32' or 'float64'"
+        raise ValueError(msg)
     return dtype.name
 
 
@@ -343,6 +349,13 @@ def _required_int(state: Mapping[str, object], key: str) -> int:
         msg = f"snapshot state.{key} must be an integer"
         raise ValueError(msg)
     return value
+
+
+def _required_seed(state: Mapping[str, object], key: str) -> int | None:
+    if key not in state:
+        msg = f"missing required snapshot state.{key}"
+        raise ValueError(msg)
+    return _validate_seed(state[key])
 
 
 def _required_str(state: Mapping[str, object], key: str) -> str:
