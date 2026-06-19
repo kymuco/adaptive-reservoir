@@ -11,6 +11,24 @@ from adaptive_reservoir.experimental.oja import (
     OjaCompressorSnapshot,
 )
 
+_COMPONENTS_4X2 = (
+    (1.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0),
+)
+_COMPONENTS_5X2 = (
+    (1.0, 0.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0, 0.0),
+)
+_COMPONENTS_4X3 = (
+    (1.0, 0.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0, 0.0),
+    (0.0, 0.0, 1.0, 0.0),
+)
+_COMPONENTS_BAD_SHAPE = (
+    (1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+)
+
 
 def test_transform_returns_expected_shape() -> None:
     compressor = OjaCompressor(input_dim=5, output_dim=2, seed=7)
@@ -45,13 +63,14 @@ def test_update_mutates_components_and_increments_samples_seen() -> None:
 def test_step_returns_projection_before_update() -> None:
     compressor = OjaCompressor(input_dim=4, output_dim=2, learning_rate=0.05, seed=11)
     features = [1.0, 0.25, -0.5, 0.75]
+    before_components = compressor.components
     before_projection = compressor.transform(features)
 
     step_projection = compressor.step(features)
 
     assert np.allclose(step_projection, before_projection)
     assert compressor.samples_seen == 1
-    assert not np.allclose(compressor.transform(features), before_projection)
+    assert not np.allclose(compressor.components, before_components)
 
 
 def test_same_seed_initializes_same_components() -> None:
@@ -143,101 +162,13 @@ def test_snapshot_to_dict_and_from_dict_roundtrip() -> None:
 @pytest.mark.parametrize(
     "snapshot",
     [
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name="wrong",
-            state={
-                "input_dim": 4,
-                "output_dim": 2,
-                "learning_rate": 0.01,
-                "seed": 1,
-                "dtype": "float64",
-                "components": ((1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0)),
-                "samples_seen": 0,
-            },
-        ),
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name=OJA_COMPRESSOR_NAME,
-            state={
-                "input_dim": 5,
-                "output_dim": 2,
-                "learning_rate": 0.01,
-                "seed": 1,
-                "dtype": "float64",
-                "components": ((1.0, 0.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0, 0.0)),
-                "samples_seen": 0,
-            },
-        ),
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name=OJA_COMPRESSOR_NAME,
-            state={
-                "input_dim": 4,
-                "output_dim": 3,
-                "learning_rate": 0.01,
-                "seed": 1,
-                "dtype": "float64",
-                "components": (
-                    (1.0, 0.0, 0.0, 0.0),
-                    (0.0, 1.0, 0.0, 0.0),
-                    (0.0, 0.0, 1.0, 0.0),
-                ),
-                "samples_seen": 0,
-            },
-        ),
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name=OJA_COMPRESSOR_NAME,
-            state={
-                "input_dim": 4,
-                "output_dim": 2,
-                "learning_rate": 0.02,
-                "seed": 1,
-                "dtype": "float64",
-                "components": ((1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0)),
-                "samples_seen": 0,
-            },
-        ),
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name=OJA_COMPRESSOR_NAME,
-            state={
-                "input_dim": 4,
-                "output_dim": 2,
-                "learning_rate": 0.01,
-                "seed": 1,
-                "dtype": "float32",
-                "components": ((1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0)),
-                "samples_seen": 0,
-            },
-        ),
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name=OJA_COMPRESSOR_NAME,
-            state={
-                "input_dim": 4,
-                "output_dim": 2,
-                "learning_rate": 0.01,
-                "seed": 1,
-                "dtype": "float64",
-                "components": ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
-                "samples_seen": 0,
-            },
-        ),
-        OjaCompressorSnapshot(
-            schema_version=OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
-            name=OJA_COMPRESSOR_NAME,
-            state={
-                "input_dim": 4,
-                "output_dim": 2,
-                "learning_rate": 0.01,
-                "seed": 1,
-                "dtype": "float64",
-                "components": ((1.0, 0.0, 0.0, 0.0), (0.0, 1.0, 0.0, 0.0)),
-                "samples_seen": -1,
-            },
-        ),
+        _snapshot(name="wrong"),
+        _snapshot(input_dim=5, components=_COMPONENTS_5X2),
+        _snapshot(output_dim=3, components=_COMPONENTS_4X3),
+        _snapshot(learning_rate=0.02),
+        _snapshot(dtype="float32"),
+        _snapshot(components=_COMPONENTS_BAD_SHAPE),
+        _snapshot(samples_seen=-1),
     ],
 )
 def test_restore_rejects_incompatible_snapshots(snapshot: OjaCompressorSnapshot) -> None:
@@ -291,3 +222,30 @@ def test_transform_and_update_validate_features() -> None:
 def test_oja_compressor_is_not_root_public_api() -> None:
     assert "OjaCompressor" not in adaptive_reservoir.__all__
     assert not hasattr(adaptive_reservoir, "OjaCompressor")
+
+
+def _snapshot(
+    *,
+    schema_version: int = OJA_COMPRESSOR_SNAPSHOT_SCHEMA_VERSION,
+    name: str = OJA_COMPRESSOR_NAME,
+    input_dim: int = 4,
+    output_dim: int = 2,
+    learning_rate: float = 0.01,
+    seed: int | None = 1,
+    dtype: str = "float64",
+    components: tuple[tuple[float, ...], ...] = _COMPONENTS_4X2,
+    samples_seen: int = 0,
+) -> OjaCompressorSnapshot:
+    return OjaCompressorSnapshot(
+        schema_version=schema_version,
+        name=name,
+        state={
+            "input_dim": input_dim,
+            "output_dim": output_dim,
+            "learning_rate": learning_rate,
+            "seed": seed,
+            "dtype": dtype,
+            "components": components,
+            "samples_seen": samples_seen,
+        },
+    )
