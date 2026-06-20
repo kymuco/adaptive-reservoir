@@ -1,10 +1,5 @@
 from __future__ import annotations
 
-import importlib
-from pathlib import Path
-
-import adaptive_reservoir
-
 
 EXPECTED_ROOT_EXPORTS = (
     "AdaptiveChannels",
@@ -35,11 +30,14 @@ EXPECTED_ROOT_EXPORTS = (
 
 
 def test_root_export_surface_is_explicitly_reviewed() -> None:
+    adaptive_reservoir = __import__("adaptive_reservoir")
+
     assert tuple(adaptive_reservoir.__all__) == EXPECTED_ROOT_EXPORTS
 
 
 def test_adapter_protocol_is_package_exported_but_not_root_exported() -> None:
-    adapters = importlib.import_module("adaptive_reservoir.adapters")
+    adaptive_reservoir = __import__("adaptive_reservoir")
+    adapters = __import__("adaptive_reservoir.adapters", fromlist=["__all__"])
 
     assert set(adapters.__all__) == {"EventVectorizer", "FloatArray"}
     assert not hasattr(adaptive_reservoir, "EventVectorizer")
@@ -47,14 +45,16 @@ def test_adapter_protocol_is_package_exported_but_not_root_exported() -> None:
 
 
 def test_stable_api_surface_doc_mentions_all_root_exports() -> None:
-    text = Path("docs/stable_api_surface.md").read_text(encoding="utf-8")
+    pathlib = __import__("pathlib", fromlist=["Path"])
+    text = pathlib.Path("docs/stable_api_surface.md").read_text(encoding="utf-8")
 
     for exported_name in EXPECTED_ROOT_EXPORTS:
         assert exported_name in text
 
 
 def test_stable_api_surface_doc_records_compatibility_boundaries() -> None:
-    text = Path("docs/stable_api_surface.md").read_text(encoding="utf-8")
+    pathlib = __import__("pathlib", fromlist=["Path"])
+    text = pathlib.Path("docs/stable_api_surface.md").read_text(encoding="utf-8")
 
     required_phrases = (
         "Stable user-facing API",
