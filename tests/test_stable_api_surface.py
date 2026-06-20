@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import adaptive_reservoir
-import adaptive_reservoir.adapters as adapters
+from adaptive_reservoir import adapters
 
 
 EXPECTED_ROOT_EXPORTS = (
