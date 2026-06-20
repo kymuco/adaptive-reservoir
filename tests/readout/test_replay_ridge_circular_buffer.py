@@ -177,6 +177,7 @@ def test_replay_ridge_float32_delayed_snapshot_keeps_large_finite_target() -> No
     target = snapshot.state["targets_buffer"][0]
     assert math.isfinite(target)
     assert target == pytest.approx(1.0e39)
+    # ReadoutSnapshot.to_dict() returns a JSON-friendly list, not the raw tuple state.
     assert snapshot.to_dict()["state"]["targets_buffer"] == [1.0e39]
 
 
