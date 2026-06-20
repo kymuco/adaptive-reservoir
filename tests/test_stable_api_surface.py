@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 
 import adaptive_reservoir
-from adaptive_reservoir import adapters
 
 
 EXPECTED_ROOT_EXPORTS = (
@@ -39,6 +39,8 @@ def test_root_export_surface_is_explicitly_reviewed() -> None:
 
 
 def test_adapter_protocol_is_package_exported_but_not_root_exported() -> None:
+    adapters = importlib.import_module("adaptive_reservoir.adapters")
+
     assert set(adapters.__all__) == {"EventVectorizer", "FloatArray"}
     assert not hasattr(adaptive_reservoir, "EventVectorizer")
     assert not hasattr(adaptive_reservoir, "FloatArray")
