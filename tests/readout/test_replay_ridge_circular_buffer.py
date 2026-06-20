@@ -177,7 +177,7 @@ def test_replay_ridge_float32_delayed_snapshot_keeps_large_finite_target() -> No
     target = snapshot.state["targets_buffer"][0]
     assert math.isfinite(target)
     assert target == pytest.approx(1.0e39)
-    assert snapshot.to_dict()["state"]["targets_buffer"] == (1.0e39,)
+    assert snapshot.to_dict()["state"]["targets_buffer"] == [1.0e39]
 
 
 def test_replay_ridge_restores_old_logical_snapshot_format() -> None:
