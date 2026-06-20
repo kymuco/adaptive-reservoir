@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import math
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -36,6 +36,16 @@ class ReservoirCore:
     recurrent_edges: EdgeList
     input_weights: FloatArray
     state: ReservoirState
+    _work_input_drive: FloatArray = field(init=False, repr=False)
+    _work_recurrent_drive: FloatArray = field(init=False, repr=False)
+    _work_pre_activation: FloatArray = field(init=False, repr=False)
+    _work_candidate: FloatArray = field(init=False, repr=False)
+    _work_new_activations: FloatArray = field(init=False, repr=False)
+    _work_fast_trace: FloatArray = field(init=False, repr=False)
+    _work_mid_trace: FloatArray = field(init=False, repr=False)
+    _work_slow_trace: FloatArray = field(init=False, repr=False)
+    _work_edge_sources: FloatArray = field(init=False, repr=False)
+    _work_edge_contributions: FloatArray = field(init=False, repr=False)
 
     @classmethod
     def from_config(cls, config: ReservoirConfig) -> ReservoirCore:
@@ -69,6 +79,7 @@ class ReservoirCore:
             msg = "state activations must match config.n_cells"
             raise ValueError(msg)
         object.__setattr__(self, "input_weights", input_weights)
+        self._initialize_work_buffers(dtype)
 
     def step(self, x: Sequence[float]) -> ReservoirState:
         """Advance reservoir state by one input vector."""
@@ -79,46 +90,103 @@ class ReservoirCore:
             dtype=self.config.dtype,
         )
         input_vector = input_vector.astype(self.input_weights.dtype, copy=False)
-        previous = self.state.activations
-        input_drive = self.input_weights @ input_vector
-        recurrent_drive = _sparse_recurrent_drive(
+        previous_state = self.state
+        previous = previous_state.activations
+
+        np.matmul(self.input_weights, input_vector, out=self._work_input_drive)
+        _sparse_recurrent_drive_into(
             edges=self.recurrent_edges,
             state=previous,
             dtype=self.input_weights.dtype,
+            out=self._work_recurrent_drive,
+            source_values=self._work_edge_sources,
+            contributions=self._work_edge_contributions,
         )
-        fatigue_drive = self.config.fatigue_rate * previous
-        pre_activation = (
-            input_drive
-            + self.config.recurrent_scale * recurrent_drive
-            - fatigue_drive
+
+        np.copyto(self._work_pre_activation, self._work_input_drive)
+        np.multiply(
+            self._work_recurrent_drive,
+            self.config.recurrent_scale,
+            out=self._work_candidate,
         )
-        candidate = np.tanh(pre_activation)
-        new_activations = (
-            (1.0 - self.config.leak_rate) * previous
-            + self.config.leak_rate * candidate
-        ).astype(self.input_weights.dtype, copy=False)
+        np.add(
+            self._work_pre_activation,
+            self._work_candidate,
+            out=self._work_pre_activation,
+        )
+        np.multiply(
+            previous,
+            self.config.fatigue_rate,
+            out=self._work_candidate,
+        )
+        np.subtract(
+            self._work_pre_activation,
+            self._work_candidate,
+            out=self._work_pre_activation,
+        )
+        np.tanh(self._work_pre_activation, out=self._work_candidate)
+
+        np.multiply(
+            previous,
+            1.0 - self.config.leak_rate,
+            out=self._work_new_activations,
+        )
+        np.multiply(
+            self._work_candidate,
+            self.config.leak_rate,
+            out=self._work_candidate,
+        )
+        np.add(
+            self._work_new_activations,
+            self._work_candidate,
+            out=self._work_new_activations,
+        )
 
         trace_config = self.config.trace
+        _update_trace_into(
+            out=self._work_fast_trace,
+            old_trace=previous_state.fast_trace,
+            state=self._work_new_activations,
+            decay=trace_config.fast_decay,
+            scratch=self._work_candidate,
+        )
+        _update_trace_into(
+            out=self._work_mid_trace,
+            old_trace=previous_state.mid_trace,
+            state=self._work_new_activations,
+            decay=trace_config.mid_decay,
+            scratch=self._work_candidate,
+        )
+        _update_trace_into(
+            out=self._work_slow_trace,
+            old_trace=previous_state.slow_trace,
+            state=self._work_new_activations,
+            decay=trace_config.slow_decay,
+            scratch=self._work_candidate,
+        )
+
         self.state = ReservoirState(
-            activations=new_activations,
-            fast_trace=_update_trace(
-                self.state.fast_trace,
-                new_activations,
-                trace_config.fast_decay,
-            ),
-            mid_trace=_update_trace(
-                self.state.mid_trace,
-                new_activations,
-                trace_config.mid_decay,
-            ),
-            slow_trace=_update_trace(
-                self.state.slow_trace,
-                new_activations,
-                trace_config.slow_decay,
-            ),
-            samples_seen=self.state.samples_seen + 1,
+            activations=self._work_new_activations,
+            fast_trace=self._work_fast_trace,
+            mid_trace=self._work_mid_trace,
+            slow_trace=self._work_slow_trace,
+            samples_seen=previous_state.samples_seen + 1,
         )
         return self.state
+
+    def _initialize_work_buffers(self, dtype: np.dtype[np.floating]) -> None:
+        n_cells = self.config.n_cells
+        n_edges = self.recurrent_edges.n_edges
+        self._work_input_drive = np.empty(n_cells, dtype=dtype)
+        self._work_recurrent_drive = np.empty(n_cells, dtype=dtype)
+        self._work_pre_activation = np.empty(n_cells, dtype=dtype)
+        self._work_candidate = np.empty(n_cells, dtype=dtype)
+        self._work_new_activations = np.empty(n_cells, dtype=dtype)
+        self._work_fast_trace = np.empty(n_cells, dtype=dtype)
+        self._work_mid_trace = np.empty(n_cells, dtype=dtype)
+        self._work_slow_trace = np.empty(n_cells, dtype=dtype)
+        self._work_edge_sources = np.empty(n_edges, dtype=dtype)
+        self._work_edge_contributions = np.empty(n_edges, dtype=dtype)
 
 
 def _default_topology_builder(config: ReservoirConfig) -> TopologyBuilderProtocol:
@@ -180,16 +248,58 @@ def _sparse_recurrent_drive(
     dtype: np.dtype[np.floating],
 ) -> FloatArray:
     drive = np.zeros(edges.n_nodes, dtype=dtype)
-    contributions = edges.weights.astype(dtype, copy=False) * state[edges.sources]
-    np.add.at(drive, edges.targets, contributions)
-    return drive
+    source_values = np.empty(edges.n_edges, dtype=dtype)
+    contributions = np.empty(edges.n_edges, dtype=dtype)
+    return _sparse_recurrent_drive_into(
+        edges=edges,
+        state=state,
+        dtype=dtype,
+        out=drive,
+        source_values=source_values,
+        contributions=contributions,
+    )
+
+
+def _sparse_recurrent_drive_into(
+    *,
+    edges: EdgeList,
+    state: FloatArray,
+    dtype: np.dtype[np.floating],
+    out: FloatArray,
+    source_values: FloatArray,
+    contributions: FloatArray,
+) -> FloatArray:
+    out.fill(0.0)
+    np.take(state, edges.sources, out=source_values)
+    np.multiply(edges.weights.astype(dtype, copy=False), source_values, out=contributions)
+    np.add.at(out, edges.targets, contributions)
+    return out
 
 
 def _update_trace(old_trace: FloatArray, state: FloatArray, decay: float) -> FloatArray:
-    return (decay * old_trace + (1.0 - decay) * state).astype(
-        state.dtype,
-        copy=False,
+    updated = np.empty_like(state)
+    scratch = np.empty_like(state)
+    return _update_trace_into(
+        out=updated,
+        old_trace=old_trace,
+        state=state,
+        decay=decay,
+        scratch=scratch,
     )
+
+
+def _update_trace_into(
+    *,
+    out: FloatArray,
+    old_trace: FloatArray,
+    state: FloatArray,
+    decay: float,
+    scratch: FloatArray,
+) -> FloatArray:
+    np.multiply(old_trace, decay, out=out)
+    np.multiply(state, 1.0 - decay, out=scratch)
+    np.add(out, scratch, out=out)
+    return out
 
 
 def _derive_seed(seed: int, label: str) -> int:
