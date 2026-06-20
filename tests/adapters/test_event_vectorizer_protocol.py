@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -12,18 +12,15 @@ from adaptive_reservoir.adapters import (
 )
 
 
-class DictEventVectorizer:
-    def transform(self, event: object) -> FloatArray:
-        if not isinstance(event, Mapping):
-            msg = "event must be a mapping"
-            raise TypeError(msg)
-        return np.asarray(
-            (
-                float(event["signal"]),
-                float(event.get("pressure", 0.0)),
-            ),
-            dtype=np.float64,
-        )
+@dataclass(frozen=True)
+class BehaviorEvent:
+    signal: float
+    pressure: float
+
+
+class BehaviorEventVectorizer:
+    def transform(self, event: BehaviorEvent) -> FloatArray:
+        return np.asarray((event.signal, event.pressure), dtype=np.float64)
 
 
 class MissingTransform:
@@ -31,17 +28,25 @@ class MissingTransform:
 
 
 def test_event_vectorizer_accepts_structural_implementation() -> None:
-    vectorizer = DictEventVectorizer()
+    vectorizer = BehaviorEventVectorizer()
 
     assert isinstance(vectorizer, EventVectorizer)
 
-    vector = vectorizer.transform({"signal": 0.75, "pressure": -0.25})
+    vector = vectorizer.transform(BehaviorEvent(signal=0.75, pressure=-0.25))
 
     assert isinstance(vector, np.ndarray)
     assert vector.shape == (2,)
     assert vector.dtype == np.float64
     assert np.all(np.isfinite(vector))
     assert np.allclose(vector, np.asarray((0.75, -0.25), dtype=np.float64))
+
+
+def test_event_vectorizer_supports_concrete_event_type_annotations() -> None:
+    vectorizer: EventVectorizer[BehaviorEvent] = BehaviorEventVectorizer()
+
+    vector = vectorizer.transform(BehaviorEvent(signal=1.0, pressure=0.5))
+
+    assert np.allclose(vector, np.asarray((1.0, 0.5), dtype=np.float64))
 
 
 def test_event_vectorizer_rejects_objects_without_transform() -> None:
