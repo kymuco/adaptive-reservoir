@@ -4,27 +4,24 @@ from pathlib import Path
 
 import numpy as np
 
-from examples.generic_behavior_adapter import (
-    BehaviorEvent,
-    default_events,
-    GenericBehaviorVectorizer,
-    run_example,
-)
+from examples import generic_behavior_adapter as adapter_example
 
 
 def test_generic_behavior_vectorizer_conforms_to_adapter_protocol() -> None:
     from adaptive_reservoir.adapters import EventVectorizer
 
-    vectorizer: EventVectorizer[BehaviorEvent] = GenericBehaviorVectorizer()
+    vectorizer: EventVectorizer[adapter_example.BehaviorEvent] = (
+        adapter_example.GenericBehaviorVectorizer()
+    )
 
     assert isinstance(vectorizer, EventVectorizer)
 
 
 def test_generic_behavior_vectorizer_returns_finite_numeric_vector() -> None:
-    vectorizer = GenericBehaviorVectorizer()
+    vectorizer = adapter_example.GenericBehaviorVectorizer()
 
     vector = vectorizer.transform(
-        BehaviorEvent(
+        adapter_example.BehaviorEvent(
             latency_ms=250.0,
             error_count=2,
             activity_score=0.75,
@@ -40,9 +37,9 @@ def test_generic_behavior_vectorizer_returns_finite_numeric_vector() -> None:
 
 
 def test_generic_behavior_adapter_example_runs_model_steps() -> None:
-    events = default_events()
+    events = adapter_example.default_events()
 
-    predictions = run_example(events)
+    predictions = adapter_example.run_example(events)
 
     assert len(predictions) == len(events)
     assert all(isinstance(prediction, float) for prediction in predictions)
