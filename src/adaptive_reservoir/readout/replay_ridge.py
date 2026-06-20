@@ -46,7 +46,12 @@ class ReplayRidgeReadout:
             (self.buffer_size, self.feature_dim),
             dtype=self.dtype,
         )
-        self._targets_buffer = np.zeros(self.buffer_size, dtype=self.dtype)
+        self._targets_buffer = np.zeros(self.buffer_size, dtype="float64")
+        self._work_features = np.empty(
+            (self.buffer_size, self.feature_dim),
+            dtype=self.dtype,
+        )
+        self._work_targets = np.empty(self.buffer_size, dtype=self.dtype)
         self._buffer_count = 0
         self._write_index = 0
 
@@ -184,12 +189,17 @@ class ReplayRidgeReadout:
     def _active_features(self) -> FloatArray:
         if self._buffer_count < self.buffer_size:
             return self._features_buffer[: self._buffer_count]
-        return self._features_buffer
+        self._copy_full_logical_features_into_work_buffer()
+        return self._work_features
 
     def _active_targets(self) -> FloatArray:
         if self._buffer_count < self.buffer_size:
-            return self._targets_buffer[: self._buffer_count]
-        return self._targets_buffer
+            self._work_targets[: self._buffer_count] = self._targets_buffer[
+                : self._buffer_count
+            ]
+            return self._work_targets[: self._buffer_count]
+        self._copy_full_logical_targets_into_work_buffer()
+        return self._work_targets
 
     def _logical_buffer_indices(self) -> tuple[int, ...]:
         if self._buffer_count == 0:
@@ -199,6 +209,16 @@ class ReplayRidgeReadout:
         return tuple(range(self._write_index, self.buffer_size)) + tuple(
             range(self._write_index)
         )
+
+    def _copy_full_logical_features_into_work_buffer(self) -> None:
+        tail_count = self.buffer_size - self._write_index
+        self._work_features[:tail_count] = self._features_buffer[self._write_index :]
+        self._work_features[tail_count:] = self._features_buffer[: self._write_index]
+
+    def _copy_full_logical_targets_into_work_buffer(self) -> None:
+        tail_count = self.buffer_size - self._write_index
+        self._work_targets[:tail_count] = self._targets_buffer[self._write_index :]
+        self._work_targets[tail_count:] = self._targets_buffer[: self._write_index]
 
     def _restore_state(self, state: Mapping[str, object]) -> None:
         feature_dim = _required_int(state, "feature_dim")
