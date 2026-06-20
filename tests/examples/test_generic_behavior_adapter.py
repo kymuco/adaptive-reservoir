@@ -10,6 +10,7 @@ from examples.generic_behavior_adapter import (
     default_events,
     run_example,
 )
+
 from adaptive_reservoir.adapters import EventVectorizer
 
 
