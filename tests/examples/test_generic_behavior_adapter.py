@@ -4,13 +4,13 @@ from pathlib import Path
 
 import numpy as np
 
-from adaptive_reservoir.adapters import EventVectorizer
 from examples.generic_behavior_adapter import (
     BehaviorEvent,
     GenericBehaviorVectorizer,
     default_events,
     run_example,
 )
+from adaptive_reservoir.adapters import EventVectorizer
 
 
 def test_generic_behavior_vectorizer_conforms_to_adapter_protocol() -> None:
