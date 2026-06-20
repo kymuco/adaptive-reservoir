@@ -6,8 +6,8 @@ import numpy as np
 
 from examples.generic_behavior_adapter import (
     BehaviorEvent,
-    GenericBehaviorVectorizer,
     default_events,
+    GenericBehaviorVectorizer,
     run_example,
 )
 
