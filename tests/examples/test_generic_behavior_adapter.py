@@ -11,10 +11,10 @@ from examples.generic_behavior_adapter import (
     run_example,
 )
 
-from adaptive_reservoir.adapters import EventVectorizer
-
 
 def test_generic_behavior_vectorizer_conforms_to_adapter_protocol() -> None:
+    from adaptive_reservoir.adapters import EventVectorizer
+
     vectorizer: EventVectorizer[BehaviorEvent] = GenericBehaviorVectorizer()
 
     assert isinstance(vectorizer, EventVectorizer)
