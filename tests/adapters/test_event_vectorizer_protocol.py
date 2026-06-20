@@ -42,10 +42,12 @@ def test_event_vectorizer_accepts_structural_implementation() -> None:
 
 
 def test_event_vectorizer_supports_concrete_event_type_annotations() -> None:
+    typed_protocol = EventVectorizer[BehaviorEvent]
     vectorizer: EventVectorizer[BehaviorEvent] = BehaviorEventVectorizer()
 
     vector = vectorizer.transform(BehaviorEvent(signal=1.0, pressure=0.5))
 
+    assert typed_protocol is not EventVectorizer
     assert np.allclose(vector, np.asarray((1.0, 0.5), dtype=np.float64))
 
 
