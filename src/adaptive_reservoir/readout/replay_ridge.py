@@ -42,8 +42,18 @@ class ReplayRidgeReadout:
         self._bias = 0.0
         self._samples_seen = 0
         self._solve_count = 0
-        self._features_buffer: list[FloatArray] = []
-        self._targets_buffer: list[float] = []
+        self._features_buffer = np.zeros(
+            (self.buffer_size, self.feature_dim),
+            dtype=self.dtype,
+        )
+        self._targets_buffer = np.zeros(self.buffer_size, dtype="float64")
+        self._work_features = np.empty(
+            (self.buffer_size, self.feature_dim),
+            dtype=self.dtype,
+        )
+        self._work_targets = np.empty(self.buffer_size, dtype=self.dtype)
+        self._buffer_count = 0
+        self._write_index = 0
 
     @property
     def samples_seen(self) -> int:
@@ -61,7 +71,7 @@ class ReplayRidgeReadout:
     def buffer_count(self) -> int:
         """Number of supervised samples currently stored in the replay buffer."""
 
-        return len(self._targets_buffer)
+        return self._buffer_count
 
     @property
     def weights(self) -> FloatArray:
@@ -104,6 +114,7 @@ class ReplayRidgeReadout:
     def snapshot(self) -> ReadoutSnapshot:
         """Return an immutable numeric snapshot of this replay ridge readout."""
 
+        buffer_indices = self._logical_buffer_indices()
         return ReadoutSnapshot(
             schema_version=READOUT_SNAPSHOT_SCHEMA_VERSION,
             name=REPLAY_RIDGE_READOUT_NAME,
@@ -118,10 +129,12 @@ class ReplayRidgeReadout:
                 "samples_seen": self._samples_seen,
                 "solve_count": self._solve_count,
                 "features_buffer": tuple(
-                    tuple(float(value) for value in row)
-                    for row in self._features_buffer
+                    tuple(float(value) for value in self._features_buffer[index])
+                    for index in buffer_indices
                 ),
-                "targets_buffer": tuple(self._targets_buffer),
+                "targets_buffer": tuple(
+                    float(self._targets_buffer[index]) for index in buffer_indices
+                ),
             },
         )
 
@@ -141,23 +154,28 @@ class ReplayRidgeReadout:
         self._restore_state(state)
 
     def _append_sample(self, features: FloatArray, target: float) -> None:
-        if len(self._features_buffer) >= self.buffer_size:
-            self._features_buffer.pop(0)
-            self._targets_buffer.pop(0)
-        self._features_buffer.append(features)
-        self._targets_buffer.append(target)
+        self._features_buffer[self._write_index] = features
+        self._targets_buffer[self._write_index] = target
+        self._write_index = (self._write_index + 1) % self.buffer_size
+        self._buffer_count = min(self._buffer_count + 1, self.buffer_size)
 
     def _refit(self) -> None:
-        if not self._features_buffer:
+        if self._buffer_count == 0:
             return
-        features = np.vstack(self._features_buffer).astype(self.dtype, copy=False)
-        targets = np.asarray(self._targets_buffer, dtype=self.dtype)
-        bias_column = np.ones((features.shape[0], 1), dtype=self.dtype)
-        design = np.hstack((features, bias_column))
+        features = self._active_features()
+        targets = self._active_targets()
+        normal_matrix = np.empty((self.feature_dim + 1, self.feature_dim + 1), dtype=self.dtype)
+        normal_matrix[: self.feature_dim, : self.feature_dim] = features.T @ features
+        feature_sums = np.sum(features, axis=0, dtype=self.dtype)
+        normal_matrix[: self.feature_dim, -1] = feature_sums
+        normal_matrix[-1, : self.feature_dim] = feature_sums
+        normal_matrix[-1, -1] = float(self._buffer_count)
         penalty = np.eye(self.feature_dim + 1, dtype=self.dtype) * self.alpha
         penalty[-1, -1] = 0.0
-        normal_matrix = design.T @ design + penalty
-        rhs = design.T @ targets
+        normal_matrix += penalty
+        rhs = np.empty(self.feature_dim + 1, dtype=self.dtype)
+        rhs[: self.feature_dim] = features.T @ targets
+        rhs[-1] = np.sum(targets, dtype=self.dtype)
         coefficients = np.linalg.solve(normal_matrix, rhs)
         if not np.all(np.isfinite(coefficients)):
             msg = "ridge refit produced non-finite coefficients"
@@ -167,6 +185,40 @@ class ReplayRidgeReadout:
         self._weights = weights
         self._bias = float(coefficients[-1])
         self._solve_count += 1
+
+    def _active_features(self) -> FloatArray:
+        if self._buffer_count < self.buffer_size:
+            return self._features_buffer[: self._buffer_count]
+        self._copy_full_logical_features_into_work_buffer()
+        return self._work_features
+
+    def _active_targets(self) -> FloatArray:
+        if self._buffer_count < self.buffer_size:
+            self._work_targets[: self._buffer_count] = self._targets_buffer[
+                : self._buffer_count
+            ]
+            return self._work_targets[: self._buffer_count]
+        self._copy_full_logical_targets_into_work_buffer()
+        return self._work_targets
+
+    def _logical_buffer_indices(self) -> tuple[int, ...]:
+        if self._buffer_count == 0:
+            return ()
+        if self._buffer_count < self.buffer_size:
+            return tuple(range(self._buffer_count))
+        return tuple(range(self._write_index, self.buffer_size)) + tuple(
+            range(self._write_index)
+        )
+
+    def _copy_full_logical_features_into_work_buffer(self) -> None:
+        tail_count = self.buffer_size - self._write_index
+        self._work_features[:tail_count] = self._features_buffer[self._write_index :]
+        self._work_features[tail_count:] = self._features_buffer[: self._write_index]
+
+    def _copy_full_logical_targets_into_work_buffer(self) -> None:
+        tail_count = self.buffer_size - self._write_index
+        self._work_targets[:tail_count] = self._targets_buffer[self._write_index :]
+        self._work_targets[tail_count:] = self._targets_buffer[: self._write_index]
 
     def _restore_state(self, state: Mapping[str, object]) -> None:
         feature_dim = _required_int(state, "feature_dim")
@@ -220,8 +272,21 @@ class ReplayRidgeReadout:
         self._bias = bias
         self._samples_seen = samples_seen
         self._solve_count = solve_count
-        self._features_buffer = features_buffer
-        self._targets_buffer = targets_buffer
+        self._restore_buffers(features_buffer, targets_buffer)
+
+    def _restore_buffers(
+        self,
+        features_buffer: Sequence[FloatArray],
+        targets_buffer: Sequence[float],
+    ) -> None:
+        self._features_buffer.fill(0.0)
+        self._targets_buffer.fill(0.0)
+        self._buffer_count = len(features_buffer)
+        self._write_index = self._buffer_count % self.buffer_size
+        for index, features in enumerate(features_buffer):
+            self._features_buffer[index] = features
+        for index, target in enumerate(targets_buffer):
+            self._targets_buffer[index] = target
 
 
 def _validate_positive_int(name: str, value: int) -> int:
