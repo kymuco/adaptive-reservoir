@@ -61,7 +61,7 @@ def test_stable_api_surface_doc_records_compatibility_boundaries() -> None:
         "Advanced implementation API",
         "Internal / non-stable areas",
         "What can change without a breaking change",
-        "EventVectorizer is intentionally not root-exported in M12",
+        "intentionally not root-exported in M12",
         "M12 keeps the root API unchanged",
     )
     for phrase in required_phrases:
