@@ -7,13 +7,12 @@ import pytest
 
 from adaptive_reservoir import AdaptiveReservoir, ReservoirConfig
 from adaptive_reservoir.core.reservoir import (
+    ReservoirCore,
     _sparse_recurrent_drive,
     _sparse_recurrent_drive_into,
-    ReservoirCore,
 )
 from adaptive_reservoir.core.state import ReservoirState
 from adaptive_reservoir.core.validation import validate_input_vector
-
 
 _INPUT_STREAM = (
     (0.1, -0.2),
