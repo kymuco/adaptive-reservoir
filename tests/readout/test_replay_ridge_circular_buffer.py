@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 
@@ -134,6 +136,50 @@ def test_replay_ridge_snapshot_restore_roundtrip_after_wrap() -> None:
     assert restored.snapshot().to_dict() == readout.snapshot().to_dict()
 
 
+def test_replay_ridge_float32_resume_refits_in_logical_order_after_wrap() -> None:
+    readout = ReplayRidgeReadout(
+        feature_dim=3,
+        buffer_size=4,
+        refit_interval=1,
+        alpha=1e-2,
+        dtype="float32",
+    )
+    for features, target in _ill_conditioned_stream():
+        readout.update(features, target)
+    restored = ReplayRidgeReadout(
+        feature_dim=3,
+        buffer_size=4,
+        refit_interval=1,
+        alpha=1e-2,
+        dtype="float32",
+    )
+    restored.restore(readout.snapshot())
+
+    next_features = (1.0e6, -1.0e-3, 3.0)
+    next_target = -2.5e3
+    readout.update(next_features, next_target)
+    restored.update(next_features, next_target)
+
+    assert restored.snapshot().to_dict() == readout.snapshot().to_dict()
+
+
+def test_replay_ridge_float32_delayed_snapshot_keeps_large_finite_target() -> None:
+    readout = ReplayRidgeReadout(
+        feature_dim=1,
+        buffer_size=2,
+        refit_interval=99,
+        dtype="float32",
+    )
+
+    readout.update((1.0,), 1.0e39)
+    snapshot = readout.snapshot()
+
+    target = snapshot.state["targets_buffer"][0]
+    assert math.isfinite(target)
+    assert target == pytest.approx(1.0e39)
+    assert snapshot.to_dict()["state"]["targets_buffer"] == (1.0e39,)
+
+
 def test_replay_ridge_restores_old_logical_snapshot_format() -> None:
     snapshot = ReadoutSnapshot(
         schema_version=READOUT_SNAPSHOT_SCHEMA_VERSION,
@@ -181,6 +227,17 @@ def _features(index: int) -> tuple[float, float]:
 
 def _target(index: int) -> float:
     return float(index) - 0.25
+
+
+def _ill_conditioned_stream() -> tuple[tuple[tuple[float, float, float], float], ...]:
+    return (
+        ((1.0e6, 1.0e-3, -1.0), 2.0e3),
+        ((-1.0e6, 2.0e-3, 1.5), -2.0e3),
+        ((5.0e5, -1.0e-3, 2.0), 1.0e3),
+        ((-5.0e5, -2.0e-3, -2.5), -1.0e3),
+        ((2.5e5, 3.0e-3, 4.0), 5.0e2),
+        ((-2.5e5, -3.0e-3, -4.5), -5.0e2),
+    )
 
 
 def _legacy_append(
