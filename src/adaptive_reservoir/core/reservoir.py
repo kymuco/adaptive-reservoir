@@ -23,6 +23,15 @@ from adaptive_reservoir.topology import (
 _INPUT_PROJECTION_SEED_LABEL = "core.input_projection"
 
 
+@dataclass(frozen=True, slots=True)
+class _RingShortcutsFastPath:
+    previous_weight: float
+    next_weight: float | None
+    shortcut_sources: np.ndarray
+    shortcut_targets: np.ndarray
+    shortcut_weights: FloatArray
+
+
 @dataclass(slots=True)
 class ReservoirCore:
     """Minimal stateful reservoir substrate.
@@ -46,6 +55,7 @@ class ReservoirCore:
     _work_slow_trace: FloatArray = field(init=False, repr=False)
     _work_edge_sources: FloatArray = field(init=False, repr=False)
     _work_edge_contributions: FloatArray = field(init=False, repr=False)
+    _ring_fast_path: _RingShortcutsFastPath | None = field(init=False, repr=False)
 
     @classmethod
     def from_config(cls, config: ReservoirConfig) -> ReservoirCore:
@@ -80,6 +90,11 @@ class ReservoirCore:
             raise ValueError(msg)
         object.__setattr__(self, "input_weights", input_weights)
         self._initialize_work_buffers(dtype)
+        self._ring_fast_path = _build_ring_shortcuts_fast_path(
+            config=self.config,
+            edges=self.recurrent_edges,
+            dtype=dtype,
+        )
 
     def step(self, x: Sequence[float]) -> ReservoirState:
         """Advance reservoir state by one input vector."""
@@ -94,14 +109,24 @@ class ReservoirCore:
         previous = previous_state.activations
 
         np.matmul(self.input_weights, input_vector, out=self._work_input_drive)
-        _sparse_recurrent_drive_into(
-            edges=self.recurrent_edges,
-            state=previous,
-            dtype=self.input_weights.dtype,
-            out=self._work_recurrent_drive,
-            source_values=self._work_edge_sources,
-            contributions=self._work_edge_contributions,
-        )
+        if self._ring_fast_path is None:
+            _sparse_recurrent_drive_into(
+                edges=self.recurrent_edges,
+                state=previous,
+                dtype=self.input_weights.dtype,
+                out=self._work_recurrent_drive,
+                source_values=self._work_edge_sources,
+                contributions=self._work_edge_contributions,
+            )
+        else:
+            _ring_shortcuts_recurrent_drive_into(
+                plan=self._ring_fast_path,
+                state=previous,
+                out=self._work_recurrent_drive,
+                scratch=self._work_candidate,
+                source_values=self._work_edge_sources,
+                contributions=self._work_edge_contributions,
+            )
 
         np.copyto(self._work_pre_activation, self._work_input_drive)
         np.multiply(
@@ -274,6 +299,132 @@ def _sparse_recurrent_drive_into(
     np.multiply(edges.weights.astype(dtype, copy=False), source_values, out=contributions)
     np.add.at(out, edges.targets, contributions)
     return out
+
+
+def _build_ring_shortcuts_fast_path(
+    *,
+    config: ReservoirConfig,
+    edges: EdgeList,
+    dtype: np.dtype[np.floating],
+) -> _RingShortcutsFastPath | None:
+    if config.topology != "ring_shortcuts":
+        return None
+    if edges.n_nodes != config.n_cells:
+        return None
+
+    edge_lookup = _edge_weight_lookup(edges)
+    previous_weights: list[float] = []
+    next_weights: list[float] = []
+    ring_edges: set[tuple[int, int]] = set()
+    for target in range(config.n_cells):
+        previous_source = (target - 1) % config.n_cells
+        previous_weight = edge_lookup.get((target, previous_source))
+        if previous_weight is None:
+            return None
+        previous_weights.append(previous_weight)
+        ring_edges.add((target, previous_source))
+
+    previous_weight = _uniform_weight(previous_weights, dtype=dtype)
+    if previous_weight is None:
+        return None
+
+    if config.n_cells > 2:
+        for target in range(config.n_cells):
+            next_source = (target + 1) % config.n_cells
+            next_weight = edge_lookup.get((target, next_source))
+            if next_weight is not None:
+                next_weights.append(next_weight)
+                ring_edges.add((target, next_source))
+        if next_weights and len(next_weights) != config.n_cells:
+            return None
+    next_weight = _uniform_weight(next_weights, dtype=dtype) if next_weights else None
+    if next_weights and next_weight is None:
+        return None
+
+    shortcut_sources: list[int] = []
+    shortcut_targets: list[int] = []
+    shortcut_weights: list[float] = []
+    for source, target, weight in zip(
+        edges.sources,
+        edges.targets,
+        edges.weights,
+        strict=True,
+    ):
+        pair = (int(target), int(source))
+        if pair in ring_edges:
+            continue
+        shortcut_sources.append(int(source))
+        shortcut_targets.append(int(target))
+        shortcut_weights.append(float(weight))
+
+    return _RingShortcutsFastPath(
+        previous_weight=previous_weight,
+        next_weight=next_weight,
+        shortcut_sources=np.asarray(shortcut_sources, dtype=np.int64),
+        shortcut_targets=np.asarray(shortcut_targets, dtype=np.int64),
+        shortcut_weights=np.asarray(shortcut_weights, dtype=dtype),
+    )
+
+
+def _ring_shortcuts_recurrent_drive_into(
+    *,
+    plan: _RingShortcutsFastPath,
+    state: FloatArray,
+    out: FloatArray,
+    scratch: FloatArray,
+    source_values: FloatArray,
+    contributions: FloatArray,
+) -> FloatArray:
+    out[0] = state[-1]
+    out[1:] = state[:-1]
+    if plan.previous_weight != 1.0:
+        np.multiply(out, plan.previous_weight, out=out)
+
+    if plan.next_weight is not None:
+        scratch[:-1] = state[1:]
+        scratch[-1] = state[0]
+        if plan.next_weight != 1.0:
+            np.multiply(scratch, plan.next_weight, out=scratch)
+        np.add(out, scratch, out=out)
+
+    shortcut_count = int(plan.shortcut_sources.size)
+    if shortcut_count:
+        shortcut_source_values = source_values[:shortcut_count]
+        shortcut_contributions = contributions[:shortcut_count]
+        np.take(state, plan.shortcut_sources, out=shortcut_source_values)
+        np.multiply(
+            plan.shortcut_weights,
+            shortcut_source_values,
+            out=shortcut_contributions,
+        )
+        np.add.at(out, plan.shortcut_targets, shortcut_contributions)
+    return out
+
+
+def _edge_weight_lookup(edges: EdgeList) -> dict[tuple[int, int], float]:
+    return {
+        (int(target), int(source)): float(weight)
+        for source, target, weight in zip(
+            edges.sources,
+            edges.targets,
+            edges.weights,
+            strict=True,
+        )
+    }
+
+
+def _uniform_weight(
+    weights: Sequence[float],
+    *,
+    dtype: np.dtype[np.floating],
+) -> float | None:
+    if not weights:
+        return None
+    values = np.asarray(weights, dtype=dtype)
+    first = values[0]
+    if not bool(np.all(values == first)):
+        return None
+    return float(first)
 
 
 def _update_trace(old_trace: FloatArray, state: FloatArray, decay: float) -> FloatArray:
