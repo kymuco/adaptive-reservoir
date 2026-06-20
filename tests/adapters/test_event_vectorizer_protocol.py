@@ -5,8 +5,11 @@ from collections.abc import Mapping
 import numpy as np
 
 import adaptive_reservoir
-from adaptive_reservoir.adapters import EventVectorizer, FloatArray
-from adaptive_reservoir.adapters import __all__ as adapters_exports
+from adaptive_reservoir.adapters import (
+    EventVectorizer,
+    FloatArray,
+    __all__ as adapters_exports,
+)
 
 
 class DictEventVectorizer:
