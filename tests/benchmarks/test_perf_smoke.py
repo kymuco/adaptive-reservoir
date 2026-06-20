@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 
 import pytest
-
 from benchmarks.perf_smoke import (
     PerfSmokeResult,
     format_markdown,
