@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-
 EXPECTED_ROOT_EXPORTS = (
     "AdaptiveChannels",
     "AdaptiveReservoir",
