@@ -5,11 +5,8 @@ from dataclasses import dataclass
 import numpy as np
 
 import adaptive_reservoir
-from adaptive_reservoir.adapters import (
-    __all__ as adapters_exports,
-    EventVectorizer,
-    FloatArray,
-)
+import adaptive_reservoir.adapters as adapters
+from adaptive_reservoir.adapters import EventVectorizer, FloatArray
 
 
 @dataclass(frozen=True)
@@ -56,7 +53,7 @@ def test_event_vectorizer_rejects_objects_without_transform() -> None:
 
 
 def test_adapters_package_exports_protocol_contract() -> None:
-    assert set(adapters_exports) == {"EventVectorizer", "FloatArray"}
+    assert set(adapters.__all__) == {"EventVectorizer", "FloatArray"}
 
 
 def test_event_vectorizer_is_not_root_exported_before_stable_api_review() -> None:
