@@ -70,8 +70,8 @@ def _summarize(rows, **kwargs):
 
 
 def test_constants_and_frozen_result() -> None:
-    assert DEVELOPMENT_SEEDS == tuple(range(10))
-    assert HOLDOUT_SEEDS == tuple(range(100, 130))
+    assert tuple(range(10)) == DEVELOPMENT_SEEDS
+    assert tuple(range(100, 130)) == HOLDOUT_SEEDS
     assert DEFAULT_BOOTSTRAP_REPLICATES == 2000
     assert NoiseAggregate.__dataclass_params__.frozen
 
