@@ -75,9 +75,11 @@ class TemporalDriftNoiseConfig:
         if self.signal_kind not in SIGNAL_KINDS:
             raise ValueError(f"unsupported signal_kind: {self.signal_kind!r}")
 
-        if self.scenario == "gradual":
-            if self.drift_at + self.gradual_steps >= self.n_samples:
-                raise ValueError("gradual drift must finish before the stream ends")
+        if (
+            self.scenario == "gradual"
+            and self.drift_at + self.gradual_steps >= self.n_samples
+        ):
+            raise ValueError("gradual drift must finish before the stream ends")
 
         if self.return_at is not None:
             _validate_int("return_at", self.return_at, minimum=1)
