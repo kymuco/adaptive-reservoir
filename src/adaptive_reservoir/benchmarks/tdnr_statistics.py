@@ -214,9 +214,8 @@ def _validate_row(row: PairedNoiseScore) -> None:
         "delta_mae", "delta_rmse",
     ):
         value = _finite_real(name, getattr(row, name))
-        if name in ("mae", "rmse", "baseline_mae", "baseline_rmse"):
-            if value < 0.0:
-                raise ValueError(f"{name} must be non-negative")
+        if name in ("mae", "rmse", "baseline_mae", "baseline_rmse") and value < 0.0:
+            raise ValueError(f"{name} must be non-negative")
 
     if not _close(row.delta_mae, row.mae - row.baseline_mae):
         raise ValueError("delta_mae does not match paired score difference")
