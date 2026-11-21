@@ -128,7 +128,7 @@ def test_canonical_group_order_and_complete_grid() -> None:
     assert len({(r.axis, r.level, r.model, r.window) for r in summaries}) == len(
         summaries
     )
-    assert [(r.axis, r.level) for r in summaries[::24]] == [
+    assert [(r.axis, r.level) for r in summaries[:: len(MODEL_NAMES) * len(WINDOW_NAMES)]] == [
         ("input", 0.0),
         ("input", 0.2),
         ("target", 0.0),
