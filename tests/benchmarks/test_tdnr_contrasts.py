@@ -79,7 +79,7 @@ def _summarize(rows, **kwargs):
 
 def test_constants_and_frozen_result() -> None:
     assert ADAPTIVE_MODEL in MODEL_NAMES
-    assert BASELINE_MODELS == tuple(name for name in MODEL_NAMES if name != ADAPTIVE_MODEL)
+    assert tuple(name for name in MODEL_NAMES if name != ADAPTIVE_MODEL) == BASELINE_MODELS
     assert len(BASELINE_MODELS) == 3
     assert BaselineContrast.__dataclass_params__.frozen
 
