@@ -13,7 +13,6 @@ import hashlib
 import json
 import os
 from collections import Counter
-from dataclasses import asdict
 from pathlib import Path
 
 from adaptive_reservoir.benchmarks.tdnr_experiment import (
