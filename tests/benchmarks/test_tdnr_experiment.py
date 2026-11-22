@@ -117,9 +117,9 @@ def test_holdout_has_its_own_seed_partition() -> None:
     manifest = json.loads(artifacts["manifest.json"])
     assert manifest["partition"] == "holdout"
     assert manifest["seeds"] == list(HOLDOUT_SEEDS)
-    assert 4320 == len(json.loads(artifacts["scores.json"])["records"])
-    assert 144 == len(json.loads(artifacts["aggregates.json"])["records"])
-    assert 108 == len(json.loads(artifacts["contrasts.json"])["records"])
+    assert len(json.loads(artifacts["scores.json"])["records"]) == 4320
+    assert len(json.loads(artifacts["aggregates.json"])["records"]) == 144
+    assert len(json.loads(artifacts["contrasts.json"])["records"]) == 108
 
 
 def test_incomplete_grid_is_rejected() -> None:
