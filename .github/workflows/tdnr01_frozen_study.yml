@@ -1,0 +1,256 @@
+name: TDNR-01 Frozen Study
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Execution mode"
+        required: true
+        type: choice
+        options:
+          - preflight
+          - full
+      confirmation:
+        description: "Explicit approval phrase"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tdnr01-frozen-study
+  cancel-in-progress: false
+
+env:
+  FROZEN_SHA: fc4823b96e3c8c065952485a5765a01a67ce3001
+  ORCHESTRATOR_SHA: caeef46e8fb62b9544eee2bf121f5e80ce2e3da9
+  PYTHONPATH: ${{ github.workspace }}/frozen/src
+  PYTHONDONTWRITEBYTECODE: "1"
+  PYTHONHASHSEED: "0"
+  OPENBLAS_NUM_THREADS: "1"
+  OMP_NUM_THREADS: "1"
+  MKL_NUM_THREADS: "1"
+  NUMEXPR_NUM_THREADS: "1"
+
+jobs:
+  authorize:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      MODE: ${{ inputs.mode }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+    steps:
+      - name: Enforce dispatch authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          case "$MODE:$CONFIRMATION" in
+            preflight:APPROVE-TDNR01-PREFLIGHT) ;;
+            full:APPROVE-TDNR01-FULL) ;;
+            *)
+              echo "Unauthorized execution request" >&2
+              exit 1
+              ;;
+          esac
+
+  preflight:
+    needs: authorize
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout PR67 orchestrator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: caeef46e8fb62b9544eee2bf121f5e80ce2e3da9
+          path: orchestration
+          persist-credentials: false
+
+      - name: Checkout frozen PR65 implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fc4823b96e3c8c065952485a5765a01a67ce3001
+          path: frozen
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11.9"
+
+      - name: Install pinned NumPy
+        run: |
+          python -m pip install --only-binary=:all: --no-deps numpy==1.26.4
+
+      - name: Verify both clean checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C frozen rev-parse HEAD)" = "$FROZEN_SHA"
+          test "$(git -C orchestration rev-parse HEAD)" = "$ORCHESTRATOR_SHA"
+          test -z "$(git -C frozen status --porcelain)"
+          test -z "$(git -C orchestration status --porcelain)"
+
+      - name: Execute bounded development seed 0
+        shell: bash
+        run: |
+          python orchestration/src/adaptive_reservoir/benchmarks/tdnr01_actions.py shard \
+            --seed 0 \
+            --output-dir tdnr01-seed-0 \
+            --frozen-root frozen \
+            --orchestrator-root orchestration \
+            --orchestrator-commit "$ORCHESTRATOR_SHA" \
+            --max-seconds 1200
+
+      - name: Preserve preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tdnr01-seed-0-attempt-${{ github.run_attempt }}
+          path: tdnr01-seed-0/
+          if-no-files-found: error
+          retention-days: 30
+
+  remaining-seeds:
+    if: ${{ inputs.mode == 'full' }}
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        seed: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9,
+          100, 101, 102, 103, 104, 105, 106, 107, 108, 109,
+          110, 111, 112, 113, 114, 115, 116, 117, 118, 119,
+          120, 121, 122, 123, 124, 125, 126, 127, 128, 129
+        ]
+    env:
+      SEED: ${{ matrix.seed }}
+    steps:
+      - name: Checkout PR67 orchestrator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: caeef46e8fb62b9544eee2bf121f5e80ce2e3da9
+          path: orchestration
+          persist-credentials: false
+
+      - name: Checkout frozen PR65 implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fc4823b96e3c8c065952485a5765a01a67ce3001
+          path: frozen
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11.9"
+
+      - name: Install pinned NumPy
+        run: |
+          python -m pip install --only-binary=:all: --no-deps numpy==1.26.4
+
+      - name: Verify both clean checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C frozen rev-parse HEAD)" = "$FROZEN_SHA"
+          test "$(git -C orchestration rev-parse HEAD)" = "$ORCHESTRATOR_SHA"
+          test -z "$(git -C frozen status --porcelain)"
+          test -z "$(git -C orchestration status --porcelain)"
+
+      - name: Execute one complete frozen seed
+        shell: bash
+        run: |
+          python orchestration/src/adaptive_reservoir/benchmarks/tdnr01_actions.py shard \
+            --seed "$SEED" \
+            --output-dir "tdnr01-seed-${SEED}" \
+            --frozen-root frozen \
+            --orchestrator-root orchestration \
+            --orchestrator-commit "$ORCHESTRATOR_SHA" \
+            --max-seconds 2400
+
+      - name: Preserve seed evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tdnr01-seed-${{ matrix.seed }}-attempt-${{ github.run_attempt }}
+          path: tdnr01-seed-${{ matrix.seed }}/
+          if-no-files-found: error
+          retention-days: 30
+
+  consolidate:
+    if: ${{ inputs.mode == 'full' }}
+    needs: remaining-seeds
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout PR67 orchestrator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: caeef46e8fb62b9544eee2bf121f5e80ce2e3da9
+          path: orchestration
+          persist-credentials: false
+
+      - name: Checkout frozen PR65 implementation
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fc4823b96e3c8c065952485a5765a01a67ce3001
+          path: frozen
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11.9"
+
+      - name: Install pinned NumPy
+        run: |
+          python -m pip install --only-binary=:all: --no-deps numpy==1.26.4
+
+      - name: Verify both clean checkouts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C frozen rev-parse HEAD)" = "$FROZEN_SHA"
+          test "$(git -C orchestration rev-parse HEAD)" = "$ORCHESTRATOR_SHA"
+          test -z "$(git -C frozen status --porcelain)"
+          test -z "$(git -C orchestration status --porcelain)"
+
+      - name: Download current-attempt seed artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: tdnr01-seed-*-attempt-${{ github.run_attempt }}
+          path: shards
+          merge-multiple: false
+
+      - name: Normalize and validate shard directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          for seed in {0..9} {100..129}; do
+            source="shards/tdnr01-seed-${seed}-attempt-${GITHUB_RUN_ATTEMPT}"
+            target="shards/tdnr01-seed-${seed}"
+            test -d "$source"
+            test ! -e "$target"
+            mv "$source" "$target"
+          done
+
+      - name: Assemble and audit full evidence
+        shell: bash
+        run: |
+          python orchestration/src/adaptive_reservoir/benchmarks/tdnr01_actions.py assemble \
+            --shards-dir shards \
+            --output-dir evidence \
+            --frozen-root frozen \
+            --orchestrator-root orchestration \
+            --orchestrator-commit "$ORCHESTRATOR_SHA"
+
+      - name: Preserve complete evidence and report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tdnr01-complete-${{ github.run_id }}-attempt-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 30
