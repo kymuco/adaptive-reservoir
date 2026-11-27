@@ -231,8 +231,8 @@ def test_sharded_assembly_matches_unsharded_frozen_evidence(
         assert verify_evidence(output / partition)["partition"] == partition
 
     report = json.loads((output / "report.json").read_bytes())
-    assert "development" in report["partitions"]
-    assert "holdout" in report["partitions"]
+    assert "development" in report["results"]
+    assert "holdout" in report["results"]
     manifest = json.loads((output / "run_manifest.json").read_bytes())
     assert manifest["status"] == "evidence_complete_independent_review_pending"
     assert manifest["score_records"] == {
